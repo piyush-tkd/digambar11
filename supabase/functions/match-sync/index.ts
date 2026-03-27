@@ -161,6 +161,11 @@ serve(async (req) => {
             : null;
         }
 
+        // Log first 3 fixture team names for debugging
+        for (const f of allFixtures.slice(0, 3)) {
+          console.log(`DEBUG fixture ${f.id}: local="${f.localteam?.data?.name}" visitor="${f.visitorteam?.data?.name}" localteam_id=${f.localteam_id} visitorteam_id=${f.visitorteam_id} localteam_keys=${JSON.stringify(Object.keys(f.localteam || {}))}`);
+        }
+
         for (const f of allFixtures) {
           const result = await syncSportmonksFixture(f);
           if (result) matchesSynced++; else matchesSkipped++;
@@ -251,8 +256,9 @@ serve(async (req) => {
 // Sync a single Sportmonks fixture to DB
 // ============================================
 async function syncSportmonksFixture(f: any): Promise<boolean> {
-  const localTeamName = f.localteam?.data?.name || '';
-  const visitorTeamName = f.visitorteam?.data?.name || '';
+  // Support both nested .data and flat structure from Sportmonks API
+  const localTeamName = f.localteam?.data?.name || f.localteam?.name || '';
+  const visitorTeamName = f.visitorteam?.data?.name || f.visitorteam?.name || '';
 
   const teamA = resolveTeam(localTeamName);
   const teamB = resolveTeam(visitorTeamName);
@@ -261,13 +267,13 @@ async function syncSportmonksFixture(f: any): Promise<boolean> {
 
   const status = mapStatus(f.status, f.live);
 
-  // Parse scores from runs include
+  // Parse scores from runs include (support both .data and flat)
   let scoreA = '';
   let scoreB = '';
-  const runs = f.runs?.data || [];
-  if (runs.length > 0) {
-    const team1Runs = runs.find((r: any) => r.team_id === f.localteam_id);
-    const team2Runs = runs.find((r: any) => r.team_id === f.visitorteam_id);
+  const runs = f.runs?.data || f.runs || [];
+  if (Array.isArray(runs) && runs.length > 0) {
+    const team1Runs = runs.find((r: any) => r.team_id === (f.localteam_id || f.localteam?.id));
+    const team2Runs = runs.find((r: any) => r.team_id === (f.visitorteam_id || f.visitorteam?.id));
     if (team1Runs) scoreA = `${team1Runs.score}/${team1Runs.wickets} (${team1Runs.overs})`;
     if (team2Runs) scoreB = `${team2Runs.score}/${team2Runs.wickets} (${team2Runs.overs})`;
   }
@@ -280,7 +286,7 @@ async function syncSportmonksFixture(f: any): Promise<boolean> {
       team_b: teamB.code,
       team_a_name: teamA.name,
       team_b_name: teamB.name,
-      venue: f.venue?.data?.name || '',
+      venue: f.venue?.data?.name || f.venue?.name || '',
       starts_at: f.starting_at || new Date().toISOString(),
       status,
       score_a: scoreA,

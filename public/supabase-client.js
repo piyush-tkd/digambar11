@@ -514,121 +514,26 @@
   };
 
   // ====== ADMIN / SYNC MODULE ======
-  // ====== CRICAPI CONFIG ======
-  const CRICAPI_KEY = '8f172a1b-912d-40ba-b476-e71e0d1d35bf';
-  const CRICAPI_BASE = 'https://api.cricapi.com/v1';
-
-  // IPL team code mapping
-  const TEAM_MAP = {
-    'Chennai Super Kings':    { code: 'CSK', name: 'Chennai' },
-    'Mumbai Indians':         { code: 'MI',  name: 'Mumbai' },
-    'Royal Challengers':      { code: 'RCB', name: 'Bangalore' },
-    'Royal Challengers Bengaluru': { code: 'RCB', name: 'Bangalore' },
-    'Royal Challengers Bangalore': { code: 'RCB', name: 'Bangalore' },
-    'Kolkata Knight Riders':  { code: 'KKR', name: 'Kolkata' },
-    'Delhi Capitals':         { code: 'DC',  name: 'Delhi' },
-    'Sunrisers Hyderabad':    { code: 'SRH', name: 'Hyderabad' },
-    'Rajasthan Royals':       { code: 'RR',  name: 'Rajasthan' },
-    'Punjab Kings':           { code: 'PBKS', name: 'Punjab' },
-    'Gujarat Titans':         { code: 'GT',  name: 'Gujarat' },
-    'Lucknow Super Giants':   { code: 'LSG', name: 'Lucknow' },
-  };
-
-  function resolveTeam(teamName) {
-    if (!teamName) return null;
-    if (TEAM_MAP[teamName]) return TEAM_MAP[teamName];
-    const lower = teamName.toLowerCase();
-    for (const [key, val] of Object.entries(TEAM_MAP)) {
-      if (lower.includes(key.toLowerCase().split(' ')[0])) return val;
-    }
-    return null;
-  }
+  // All Sportmonks API calls go through Supabase Edge Functions (server-side)
+  // to avoid CORS issues. The Edge Function handles Sportmonks → DB sync.
+  // Browser clients never call Sportmonks directly.
 
   const Admin = {
-    // Sync IPL matches from CricAPI directly (client-side)
-    // CricAPI is blocked from Supabase Edge Functions but works from browsers
+    // ============================================================
+    // Sync IPL matches via Edge Function (Sportmonks primary, CricAPI fallback)
+    // The Edge Function runs server-side — no CORS issues with Sportmonks.
+    // ============================================================
     async syncMatches() {
-      const sb = await initSupabase();
-      console.log('Fetching IPL matches from CricAPI...');
-
+      console.log('Syncing IPL matches via Edge Function (Sportmonks)...');
       try {
-        // Fetch current + upcoming matches
-        const [currentRes, upcomingRes] = await Promise.all([
-          fetch(`${CRICAPI_BASE}/currentMatches?apikey=${CRICAPI_KEY}&offset=0`),
-          fetch(`${CRICAPI_BASE}/matches?apikey=${CRICAPI_KEY}&offset=0`),
-        ]);
-        const currentJson = await currentRes.json();
-        const upcomingJson = await upcomingRes.json();
-
-        const allMatches = [...(currentJson.data || []), ...(upcomingJson.data || [])];
-
-        // Filter IPL matches
-        const iplMatches = allMatches.filter(m => {
-          const name = (m.name || '').toLowerCase();
-          return name.includes('indian premier league') || name.includes('ipl');
+        const res = await fetch(`${FUNCTIONS_URL}/match-sync`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
         });
-
-        // Deduplicate by ID
-        const seen = new Set();
-        const uniqueMatches = [];
-        for (const m of iplMatches) {
-          const id = m.id || m.unique_id;
-          if (!id || seen.has(id)) continue;
-          seen.add(id);
-          uniqueMatches.push(m);
-        }
-
-        console.log(`Found ${uniqueMatches.length} IPL matches from CricAPI`);
-
-        // Build match records for bulk upsert
-        const matchRecords = [];
-        for (const m of uniqueMatches) {
-          const teams = m.teams || [];
-          const teamA = resolveTeam(teams[0]);
-          const teamB = resolveTeam(teams[1]);
-          if (!teamA || !teamB) continue;
-
-          let status = 'upcoming';
-          if (m.matchStarted && !m.matchEnded) status = 'live';
-          else if (m.matchEnded) status = 'completed';
-
-          const scores = m.score || [];
-          const scoreA = scores[0] ? `${scores[0].r}/${scores[0].w} (${scores[0].o})` : '';
-          const scoreB = scores[1] ? `${scores[1].r}/${scores[1].w} (${scores[1].o})` : '';
-
-          matchRecords.push({
-            external_id: String(m.id || m.unique_id),
-            team_a: teamA.code,
-            team_b: teamB.code,
-            team_a_name: teamA.name,
-            team_b_name: teamB.name,
-            venue: m.venue || '',
-            starts_at: m.dateTimeGMT || new Date().toISOString(),
-            status,
-            score_a: scoreA,
-            score_b: scoreB,
-            result: m.status || null,
-            innings: scores.length,
-          });
-        }
-
-        // Bulk upsert via Supabase RPC (SECURITY DEFINER function)
-        const { data, error } = await sb.rpc('bulk_upsert_matches', {
-          matches: matchRecords,
-        });
-
-        if (error) {
-          console.error('Bulk upsert failed:', error);
-          return { success: false, error: error.message };
-        }
-
-        const result = {
-          success: true,
-          provider: 'cricketdata',
-          matches_synced: data?.synced || matchRecords.length,
-          matches_skipped: data?.failed || 0,
-          api_calls_made: 2,
-        };
+        const result = await res.json();
         console.log('Match sync complete:', result);
         return result;
       } catch (err) {
@@ -637,31 +542,39 @@
       }
     },
 
-    // Trigger live score ingestion via Edge Function
-    async triggerScoreIngestion() {
-      const res = await fetch(`${FUNCTIONS_URL}/score-ingestion`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      return await res.json();
+    // Trigger live score update for a specific match via Edge Function
+    async triggerLiveUpdate(matchExternalId) {
+      console.log(`Triggering live update for match ${matchExternalId}...`);
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/live-score`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ match_external_id: matchExternalId }),
+        });
+        return await res.json();
+      } catch (err) {
+        console.error('Live update failed:', err);
+        return { success: false, error: String(err) };
+      }
     },
 
-    // Check provider status
+    // Check provider status via Edge Function
     async getProviderStatus() {
       try {
-        const res = await fetch(`${CRICAPI_BASE}/matches?apikey=${CRICAPI_KEY}&offset=0`);
-        const data = await res.json();
-        return {
-          reachable: data.status === 'success',
-          provider: 'cricketdata',
-          hitsToday: data.info?.hitsToday || 0,
-          hitsLimit: data.info?.hitsLimit || 100,
-        };
+        const res = await fetch(`${FUNCTIONS_URL}/match-sync`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ action: 'status' }),
+        });
+        return await res.json();
       } catch {
-        return { reachable: false };
+        return { reachable: false, provider: 'unknown' };
       }
     },
   };
@@ -671,7 +584,7 @@
 
   const ScorePoller = {
     // Start polling live scores from Supabase every N seconds
-    // This reads from the DB — NOT from CricAPI. Safe for all 50 users.
+    // This reads from the DB — NOT from any external API. Safe for all 50 users.
     startPolling(matchId, onUpdate, intervalMs = 30000) {
       this.stopPolling(); // clear any existing
 
@@ -700,71 +613,31 @@
   };
 
   // ====== CENTRALIZED LIVE MATCH UPDATER ======
-  // Only ONE person (admin/host) runs this. It fetches live scores from
-  // CricAPI every 2 minutes and writes to Supabase. All other users get
-  // instant updates via Supabase Realtime subscriptions — zero API calls.
+  // Only ONE person (admin/host) runs this. It calls the Edge Function
+  // every 30 seconds which fetches live scores from Sportmonks server-side
+  // and writes to Supabase. All other users get instant updates via
+  // Supabase Realtime subscriptions — zero external API calls from browser.
   //
-  // Rate budget: 1 call every 2 min = 30 calls/hour = ~120 calls per 4h match
-  // That leaves headroom for match-sync and other calls within CricAPI's 100/day free tier.
-  // For multiple simultaneous matches, consider upgrading the API plan.
+  // With Sportmonks Major Plan: 2000 requests/hour, ball-by-ball accuracy.
 
   let _liveUpdaterInterval = null;
 
   const LiveMatchUpdater = {
     // Start centralized score updates (admin only — run on ONE browser tab)
-    async startUpdating(matchExternalId, intervalMs = 120000) {
+    async startUpdating(matchExternalId, intervalMs = 30000) {
       this.stopUpdating();
-      const sb = await initSupabase();
 
       console.log(`ADMIN: Starting live score updates for match ${matchExternalId} (every ${intervalMs/1000}s)`);
-      console.log('Other users will get instant updates via Supabase Realtime.');
+      console.log('All calls go through Edge Function (no CORS). Users get Realtime push.');
 
       const update = async () => {
         try {
-          // Fetch live match data from CricAPI
-          const res = await fetch(`${CRICAPI_BASE}/match_info?apikey=${CRICAPI_KEY}&id=${matchExternalId}`);
-          const json = await res.json();
-
-          if (json.status !== 'success' || !json.data) {
-            console.warn('CricAPI returned no data for this match');
-            return;
+          const result = await Admin.triggerLiveUpdate(matchExternalId);
+          if (result.success) {
+            console.log(`Score updated: ${result.score_a || '?'} vs ${result.score_b || '?'} [${result.status || '?'}]`);
           }
-
-          const m = json.data;
-          const teams = m.teams || [];
-          const teamA = resolveTeam(teams[0]);
-          const teamB = resolveTeam(teams[1]);
-
-          if (!teamA || !teamB) return;
-
-          let status = 'upcoming';
-          if (m.matchStarted && !m.matchEnded) status = 'live';
-          else if (m.matchEnded) status = 'completed';
-
-          const scores = m.score || [];
-          const scoreA = scores[0] ? `${scores[0].r}/${scores[0].w} (${scores[0].o})` : '';
-          const scoreB = scores[1] ? `${scores[1].r}/${scores[1].w} (${scores[1].o})` : '';
-
-          // Update match in DB via RPC (triggers Realtime push to all users)
-          await sb.rpc('upsert_match', {
-            p_external_id: matchExternalId,
-            p_team_a: teamA.code,
-            p_team_b: teamB.code,
-            p_team_a_name: teamA.name,
-            p_team_b_name: teamB.name,
-            p_venue: m.venue || '',
-            p_starts_at: m.dateTimeGMT || new Date().toISOString(),
-            p_status: status,
-            p_score_a: scoreA,
-            p_score_b: scoreB,
-            p_result: m.status || null,
-            p_innings: scores.length,
-          });
-
-          console.log(`Score updated: ${teamA.code} ${scoreA} vs ${teamB.code} ${scoreB} [${status}]`);
-
           // Auto-stop when match is completed
-          if (status === 'completed') {
+          if (result.status === 'completed') {
             console.log('Match completed! Stopping live updates.');
             this.stopUpdating();
           }
@@ -841,10 +714,10 @@
     // Friends
     getFriends: Friends.getFriends,
 
-    // Admin / Sync (for triggering API data sync)
-    syncMatches: Admin.syncMatches,
-    triggerScoreIngestion: Admin.triggerScoreIngestion,
-    getProviderStatus: Admin.getProviderStatus,
+    // Admin / Sync (all API calls go through Edge Functions — no CORS issues)
+    syncMatches: Admin.syncMatches.bind(Admin),
+    triggerLiveUpdate: Admin.triggerLiveUpdate.bind(Admin),
+    getProviderStatus: Admin.getProviderStatus.bind(Admin),
 
     // Live Match Updater (ADMIN ONLY — run on exactly ONE browser tab)
     // Fetches scores from CricAPI every 2 min, writes to DB,
@@ -854,6 +727,7 @@
     isLiveUpdating: LiveMatchUpdater.isUpdating.bind(LiveMatchUpdater),
   };
 
-  console.log('🏏 D11API (Supabase) loaded — real backend ready');
-  console.log('💡 To connect live data: D11API.syncMatches() — fetches real IPL fixtures from CricAPI');
+  console.log('🏏 D11API (Supabase + Sportmonks) loaded — real backend ready');
+  console.log('💡 D11API.syncMatches() — syncs 70+ IPL fixtures via Sportmonks (server-side, no CORS)');
+  console.log('💡 D11API.startLiveUpdates("sm_12345") — starts live score polling for a match');
 })();

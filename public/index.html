@@ -1722,7 +1722,7 @@ function renderLeaderboard() {
         <div class="lb-username">${d.name}${d.isYou ? '<span class="lb-you-label">YOU</span>' : ''}</div>
         <div class="lb-team-name">${d.team}</div>
       </div>
-      <div style="width:55px;text-align:center;font-size:14px;font-weight:800;">${d.pts}</div>
+      <div style="width:55px;text-align:center;font-size:14px;font-weight:800;">${fmtPts(d.pts)}</div>
       <div style="width:55px;text-align:right;font-size:13px;font-weight:700;color:${wonColor}">${wonText}</div>
     </div>`;
   }).join('');
@@ -1803,7 +1803,7 @@ function renderLeaderboard() {
       return `<div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--d11-border);font-size:11px;">
         <div style="flex:1;"><span style="color:var(--d11-light);font-weight:600;">${h.match}</span><br><span style="color:var(--d11-grey);font-size:10px;">${h.date}</span></div>
         <div style="width:30px;text-align:center;font-weight:700;color:${hRankColor};">#${h.rank}</div>
-        <div style="width:45px;text-align:center;font-weight:700;">${h.pts}</div>
+        <div style="width:45px;text-align:center;font-weight:700;">${fmtPts(h.pts)}</div>
         <div style="width:50px;text-align:right;font-weight:700;color:${hWonColor};">${hWonText}</div>
       </div>`;
     }).join('');
@@ -1817,7 +1817,7 @@ function renderLeaderboard() {
         </div>
         <div style="width:40px;text-align:center;font-size:13px;font-weight:700;color:var(--d11-green);">${d.wins}</div>
         <div style="width:40px;text-align:center;font-size:13px;font-weight:700;color:var(--d11-red);">${d.losses}</div>
-        <div style="width:55px;text-align:center;font-size:13px;font-weight:700;">${d.avgPts}</div>
+        <div style="width:55px;text-align:center;font-size:13px;font-weight:700;">${fmtPts(d.avgPts)}</div>
         <div style="width:60px;text-align:right;font-size:13px;font-weight:700;color:${netColor}">${netText}</div>
       </div>
       <div id="hist-${d.rank}" style="display:none;background:rgba(0,0,0,0.2);border-bottom:2px solid var(--d11-border);">
@@ -1924,6 +1924,10 @@ function switchLiveTab(tab) {
   if (tab === 'compare') renderCompare();
 }
 
+// Helper: format points to avoid floating point display artifacts (e.g. -20.799999999999955 → -20.8)
+function fmtPts(v) { return parseFloat(Number(v).toFixed(1)); }
+function fmtPtsStr(v) { return Number(v).toFixed(1); }
+
 function renderLiveScorecard() {
   const list = document.getElementById('live-scorecard-list');
   const myPicks = new Set(friendSquads[myName].players.map(p => p.name));
@@ -1963,9 +1967,9 @@ function renderLiveScorecard() {
       return `<span title="${n}" style="width:16px;height:16px;border-radius:50%;font-size:8px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;${isMe ? 'background:var(--d11-green);color:white;' : 'background:rgba(255,255,255,0.1);color:var(--d11-grey);'}">${initial}</span>`;
     }).join('');
 
-    let displayPts = p.pts;
-    if (isYours && cap === 'C') displayPts = p.pts * 2;
-    else if (isYours && cap === 'VC') displayPts = p.pts * 1.5;
+    let displayPts = fmtPts(p.pts);
+    if (isYours && cap === 'C') displayPts = fmtPts(p.pts * 2);
+    else if (isYours && cap === 'VC') displayPts = fmtPts(p.pts * 1.5);
 
     return `<div class="live-player-row${rowClass}">
       <div class="live-dot ${statusDot}"></div>
@@ -1975,7 +1979,7 @@ function renderLiveScorecard() {
       </div>
       <div style="text-align:right;">
         <div style="font-size:14px;font-weight:800;">${displayPts}</div>
-        <div style="font-size:9px;color:var(--d11-grey);">${p.pts} base${cap ? ' × ' + (cap==='C'?'2':'1.5') : ''}</div>
+        <div style="font-size:9px;color:var(--d11-grey);">${fmtPts(p.pts)} base${cap ? ' × ' + (cap==='C'?'2':'1.5') : ''}</div>
       </div>
     </div>`;
   }).join('');
@@ -1995,7 +1999,7 @@ function renderAllSquads() {
           <div style="font-size:11px;color:var(--d11-grey);">${sq.squad}</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:16px;font-weight:800;color:var(--d11-green);">${sq.pts}</div>
+          <div style="font-size:16px;font-weight:800;color:var(--d11-green);">${fmtPts(sq.pts)}</div>
           <div style="font-size:10px;color:var(--d11-grey);">#${sq.rank}</div>
         </div>
         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:var(--d11-grey);flex-shrink:0;"><path d="M7 10l5 5 5-5z"/></svg>
@@ -2009,7 +2013,7 @@ function renderAllSquads() {
             <div class="live-dot ${dotClass}"></div>
             <div style="flex:1;font-weight:600;">${p.name}${capTag}</div>
             <div style="font-size:10px;color:var(--d11-grey);width:35px;">${p.role}</div>
-            <div style="font-size:12px;font-weight:800;width:40px;text-align:right;">${p.pts}</div>
+            <div style="font-size:12px;font-weight:800;width:40px;text-align:right;">${fmtPts(p.pts)}</div>
           </div>`;
         }).join('')}
       </div>
@@ -2035,7 +2039,7 @@ function renderCompare() {
   const onlyMine = mine.players.filter(p => !theirNames.has(p.name));
   const onlyTheirs = theirs.players.filter(p => !myNames.has(p.name));
 
-  const ptsDiff = mine.pts - theirs.pts;
+  const ptsDiff = fmtPts(mine.pts - theirs.pts);
   const diffColor = ptsDiff > 0 ? 'var(--d11-green)' : ptsDiff < 0 ? 'var(--d11-red)' : 'var(--d11-grey)';
   const diffText = ptsDiff > 0 ? `+${ptsDiff}` : `${ptsDiff}`;
 
@@ -2044,7 +2048,7 @@ function renderCompare() {
       <div class="compare-header">
         <div style="text-align:center;flex:1;">
           <div style="font-size:11px;color:var(--d11-grey);">You</div>
-          <div style="font-size:20px;font-weight:900;color:var(--d11-green);">${mine.pts}</div>
+          <div style="font-size:20px;font-weight:900;color:var(--d11-green);">${fmtPts(mine.pts)}</div>
           <div style="font-size:10px;color:var(--d11-grey);">${mine.squad}</div>
         </div>
         <div style="text-align:center;padding:0 12px;">
@@ -2053,7 +2057,7 @@ function renderCompare() {
         </div>
         <div style="text-align:center;flex:1;">
           <div style="font-size:11px;color:var(--d11-grey);">${compareWith}</div>
-          <div style="font-size:20px;font-weight:900;">${theirs.pts}</div>
+          <div style="font-size:20px;font-weight:900;">${fmtPts(theirs.pts)}</div>
           <div style="font-size:10px;color:var(--d11-grey);">${theirs.squad}</div>
         </div>
       </div>
@@ -2068,7 +2072,7 @@ function renderCompare() {
         return `<div class="compare-row" style="padding:8px 12px;">
           <div style="flex:1;font-weight:600;font-size:12px;">${p.name}</div>
           <div style="width:30px;text-align:center;font-size:10px;color:var(--d11-gold);font-weight:700;">${myCap}</div>
-          <div style="width:40px;text-align:center;font-weight:800;font-size:12px;">${p.pts}</div>
+          <div style="width:40px;text-align:center;font-weight:800;font-size:12px;">${fmtPts(p.pts)}</div>
           <div style="width:30px;text-align:center;font-size:10px;color:var(--d11-blue);font-weight:700;">${theirCap}</div>
         </div>`;
       }).join('')}
@@ -2080,7 +2084,7 @@ function renderCompare() {
         <div class="live-dot ${p.status}"></div>
         <div style="flex:1;font-weight:600;font-size:12px;">${p.name}${p.cap?` <span style="font-size:9px;color:var(--d11-gold);">${p.cap}</span>`:''}</div>
         <div style="font-size:10px;color:var(--d11-grey);width:35px;">${p.role}</div>
-        <div style="font-weight:800;font-size:12px;width:40px;text-align:right;color:var(--d11-green);">+${p.pts}</div>
+        <div style="font-weight:800;font-size:12px;width:40px;text-align:right;color:var(--d11-green);">+${fmtPts(p.pts)}</div>
       </div>`).join('')}
     </div>
 
@@ -2090,7 +2094,7 @@ function renderCompare() {
         <div class="live-dot ${p.status}"></div>
         <div style="flex:1;font-weight:600;font-size:12px;">${p.name}${p.cap?` <span style="font-size:9px;color:var(--d11-gold);">${p.cap}</span>`:''}</div>
         <div style="font-size:10px;color:var(--d11-grey);width:35px;">${p.role}</div>
-        <div style="font-weight:800;font-size:12px;width:40px;text-align:right;color:var(--d11-red);">-${p.pts}</div>
+        <div style="font-weight:800;font-size:12px;width:40px;text-align:right;color:var(--d11-red);">-${fmtPts(p.pts)}</div>
       </div>`).join('')}
     </div>
   `;
@@ -2509,7 +2513,7 @@ function startLiveSimulation() {
     const liveScreen = document.getElementById('screen-live-match');
     if (liveScreen && liveScreen.style.display !== 'none') {
       renderLiveScorecard();
-      document.getElementById('live-your-pts').textContent = friendSquads[myName].pts;
+      document.getElementById('live-your-pts').textContent = fmtPts(friendSquads[myName].pts);
     }
   }, 5000); // Update every 5 seconds
 }
