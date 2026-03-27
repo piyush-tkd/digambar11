@@ -1456,6 +1456,21 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div id="admin-match-list" style="font-size:13px;color:var(--d11-grey);">Loading...</div>
       </div>
 
+      <!-- Environment Toggle -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">🧪 Environment</div>
+        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Switch between production (real data) and pre-prod (dummy data for testing)</div>
+        <div id="admin-env-status" style="font-size:13px;font-weight:600;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="switchEnv('prod')" id="env-prod-btn" style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--d11-green);background:transparent;color:var(--d11-green);font-size:13px;font-weight:700;cursor:pointer;">
+            🟢 Production
+          </button>
+          <button onclick="switchEnv('preprod')" id="env-preprod-btn" style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--d11-orange);background:transparent;color:var(--d11-orange);font-size:13px;font-weight:700;cursor:pointer;">
+            🧪 Pre-Prod
+          </button>
+        </div>
+      </div>
+
       <!-- Sync Log -->
       <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📝 Sync Log</div>
@@ -2035,6 +2050,39 @@ function showToast(msg, duration = 3000) {
   toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
 
+// ====== ENVIRONMENT TOGGLE (Admin Only) ======
+function isPreProd() {
+  return new URLSearchParams(window.location.search).get('env') === 'preprod';
+}
+
+function switchEnv(env) {
+  const url = new URL(window.location.href);
+  if (env === 'preprod') {
+    url.searchParams.set('env', 'preprod');
+  } else {
+    url.searchParams.delete('env');
+  }
+  // Preserve hash
+  window.location.href = url.toString();
+}
+
+function updateEnvUI() {
+  const statusEl = document.getElementById('admin-env-status');
+  const prodBtn = document.getElementById('env-prod-btn');
+  const preprodBtn = document.getElementById('env-preprod-btn');
+  if (!statusEl) return;
+
+  if (isPreProd()) {
+    statusEl.innerHTML = '<span style="color:var(--d11-orange);">🧪 Currently in PRE-PROD mode (dummy data)</span>';
+    if (prodBtn) { prodBtn.style.background = 'transparent'; prodBtn.style.opacity = '0.6'; }
+    if (preprodBtn) { preprodBtn.style.background = 'var(--d11-orange)'; preprodBtn.style.color = '#000'; preprodBtn.style.opacity = '1'; }
+  } else {
+    statusEl.innerHTML = '<span style="color:var(--d11-green);">🟢 Currently in PRODUCTION mode (real data)</span>';
+    if (prodBtn) { prodBtn.style.background = 'var(--d11-green)'; prodBtn.style.color = '#000'; prodBtn.style.opacity = '1'; }
+    if (preprodBtn) { preprodBtn.style.background = 'transparent'; preprodBtn.style.opacity = '0.6'; }
+  }
+}
+
 // ====== ADMIN PANEL ======
 const ADMIN_EMAIL = 'bahetipiyush@gmail.com';
 let _adminLogLines = [];
@@ -2068,6 +2116,7 @@ function isAdmin() {
 
 async function loadAdminPanel() {
   adminLog('Loading admin panel...');
+  updateEnvUI();
 
   // Check API status
   const statusEl = document.getElementById('admin-api-status');
@@ -2778,5 +2827,6 @@ showScreen = function(id) {
 };
 </script>
 <script src="./supabase-client.js"></script>
+<script src="./preprod-data.js"></script>
 </body>
 </html>
