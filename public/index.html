@@ -557,109 +557,11 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       </div>
 
       <div class="match-section">
-        <div class="section-label">Upcoming Matches</div>
-
-        <div class="match-card fade-in" onclick="showScreen('match-detail')">
-          <div class="match-card-header">
-            <span class="match-league">IPL 2026 • Match 28</span>
-            <span class="match-status upcoming">Tomorrow, 7:30 PM</span>
-          </div>
-          <div class="match-card-body">
-            <div class="match-team">
-              <div class="team-logo bg-csk">CSK</div>
-              <div>
-                <div class="team-name">Chennai</div>
-                <div class="team-record">5W 2L</div>
-              </div>
-            </div>
-            <div class="match-center">
-              <div class="match-time">19h 30m</div>
-              <div class="match-date">Mar 22</div>
-            </div>
-            <div class="match-team away">
-              <div class="team-logo bg-mi">MI</div>
-              <div>
-                <div class="team-name">Mumbai</div>
-                <div class="team-record">4W 3L</div>
-              </div>
-            </div>
-          </div>
-          <div class="match-card-footer">
-            <div class="friend-league-info" style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--d11-green); font-weight:600;">
-              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:var(--d11-green)"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-              4 friends joined • ₹100 pool
-            </div>
-            <span class="teams-created">4 teams</span>
+        <div id="matches-container">
+          <div style="text-align:center; padding:40px 0; color:var(--d11-grey); font-size:13px;">
+            Loading matches...
           </div>
         </div>
-
-        <div class="match-card fade-in" onclick="showScreen('live-match')">
-          <div class="match-card-header">
-            <span class="match-league">IPL 2026 • Match 29</span>
-            <span class="match-status live">● LIVE</span>
-          </div>
-          <div class="match-card-body">
-            <div class="match-team">
-              <div class="team-logo bg-rcb">RCB</div>
-              <div>
-                <div class="team-name">Bangalore</div>
-                <div class="team-record">3W 4L</div>
-              </div>
-            </div>
-            <div class="match-center">
-              <div class="match-vs">VS</div>
-            </div>
-            <div class="match-team away">
-              <div class="team-logo bg-kkr">KKR</div>
-              <div>
-                <div class="team-name">Kolkata</div>
-                <div class="team-record">6W 1L</div>
-              </div>
-            </div>
-          </div>
-          <div class="match-card-footer">
-            <div class="friend-league-info" style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--d11-green); font-weight:600;">
-              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:var(--d11-green)"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-              6 friends joined • ₹150 pool
-            </div>
-            <span class="teams-created">6 teams</span>
-          </div>
-        </div>
-
-        <div class="match-card fade-in" onclick="showScreen('match-detail')">
-          <div class="match-card-header">
-            <span class="match-league">IPL 2026 • Match 30</span>
-            <span class="match-status upcoming">Mar 23, 3:30 PM</span>
-          </div>
-          <div class="match-card-body">
-            <div class="match-team">
-              <div class="team-logo bg-dc">DC</div>
-              <div>
-                <div class="team-name">Delhi</div>
-                <div class="team-record">3W 3L</div>
-              </div>
-            </div>
-            <div class="match-center">
-              <div class="match-time">1d 18h</div>
-              <div class="match-date">Mar 23</div>
-            </div>
-            <div class="match-team away">
-              <div class="team-logo bg-srh">SRH</div>
-              <div>
-                <div class="team-name">Hyderabad</div>
-                <div class="team-record">4W 2L</div>
-              </div>
-            </div>
-          </div>
-          <div class="match-card-footer">
-            <div class="friend-league-info" style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--d11-grey); font-weight:600;">
-              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:var(--d11-grey)"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-              No teams yet • Invite friends
-            </div>
-            <span class="teams-created" style="color:var(--d11-orange)">Open</span>
-          </div>
-        </div>
-
       </div>
     </div>
   </div>
@@ -1540,6 +1442,164 @@ let viceCaptainId = null;
 // ====== NAVIGATION ======
 const screensWithNav = ['home', 'my-matches', 'leaderboard', 'wallet', 'profile'];
 
+// ====== TEAM NAME MAPPINGS ======
+const TEAM_SHORT_NAMES = {
+  'CSK': 'Chennai', 'MI': 'Mumbai', 'RCB': 'Bangalore', 'KKR': 'Kolkata',
+  'DC': 'Delhi', 'SRH': 'Hyderabad', 'RR': 'Rajasthan', 'PBKS': 'Punjab',
+  'GT': 'Gujarat', 'LSG': 'Lucknow',
+  'Chennai Super Kings': 'Chennai', 'Mumbai Indians': 'Mumbai',
+  'Royal Challengers Bengaluru': 'Bangalore', 'Royal Challengers Bangalore': 'Bangalore',
+  'Kolkata Knight Riders': 'Kolkata', 'Delhi Capitals': 'Delhi',
+  'Sunrisers Hyderabad': 'Hyderabad', 'Rajasthan Royals': 'Rajasthan',
+  'Punjab Kings': 'Punjab', 'Gujarat Titans': 'Gujarat', 'Lucknow Super Giants': 'Lucknow'
+};
+const TEAM_CODES = {
+  'CSK': 'CSK', 'MI': 'MI', 'RCB': 'RCB', 'KKR': 'KKR', 'DC': 'DC',
+  'SRH': 'SRH', 'RR': 'RR', 'PBKS': 'PBKS', 'GT': 'GT', 'LSG': 'LSG',
+  'Chennai Super Kings': 'CSK', 'Mumbai Indians': 'MI',
+  'Royal Challengers Bengaluru': 'RCB', 'Royal Challengers Bangalore': 'RCB',
+  'Kolkata Knight Riders': 'KKR', 'Delhi Capitals': 'DC',
+  'Sunrisers Hyderabad': 'SRH', 'Rajasthan Royals': 'RR',
+  'Punjab Kings': 'PBKS', 'Gujarat Titans': 'GT', 'Lucknow Super Giants': 'LSG'
+};
+
+function getTeamCode(name) { return TEAM_CODES[name] || name.substring(0,3).toUpperCase(); }
+function getTeamShort(name) { return TEAM_SHORT_NAMES[name] || name; }
+
+function formatMatchTime(startsAt) {
+  const now = new Date();
+  const start = new Date(startsAt);
+  const diff = start - now;
+  if (diff < 0) return { label: 'Started', css: 'live' };
+  const days = Math.floor(diff / 86400000);
+  const hrs = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  if (days > 1) {
+    return { label: start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) + ', ' + start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }), css: 'upcoming' };
+  }
+  if (days === 1) return { label: 'Tomorrow, ' + start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true }), css: 'upcoming' };
+  return { label: hrs + 'h ' + mins + 'm', css: 'upcoming' };
+}
+
+function renderMatchCard(match) {
+  const codeA = getTeamCode(match.team_a);
+  const codeB = getTeamCode(match.team_b);
+  const shortA = getTeamShort(match.team_a_name || match.team_a);
+  const shortB = getTeamShort(match.team_b_name || match.team_b);
+  const isLive = match.status === 'live';
+  const isCompleted = match.status === 'completed';
+
+  let statusHtml, centerHtml;
+  if (isLive) {
+    statusHtml = '<span class="match-status live">● LIVE</span>';
+    centerHtml = '<div class="match-vs">VS</div>';
+  } else if (isCompleted) {
+    statusHtml = '<span class="match-status" style="color:var(--d11-grey)">Completed</span>';
+    centerHtml = match.result ? '<div style="font-size:10px;color:var(--d11-grey);text-align:center;max-width:80px;">' + match.result + '</div>' : '<div class="match-vs">VS</div>';
+  } else {
+    const t = formatMatchTime(match.starts_at);
+    statusHtml = '<span class="match-status ' + t.css + '">' + t.label + '</span>';
+    const start = new Date(match.starts_at);
+    const diff = start - new Date();
+    const days = Math.floor(diff / 86400000);
+    const hrs = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    if (days > 0) centerHtml = '<div class="match-time">' + days + 'd ' + hrs + 'h</div><div class="match-date">' + start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) + '</div>';
+    else centerHtml = '<div class="match-time">' + hrs + 'h ' + mins + 'm</div><div class="match-date">' + start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) + '</div>';
+  }
+
+  const scoreA = match.score_a ? '<div style="font-size:10px;color:var(--d11-green);font-weight:600;">' + match.score_a + '</div>' : '';
+  const scoreB = match.score_b ? '<div style="font-size:10px;color:var(--d11-green);font-weight:600;">' + match.score_b + '</div>' : '';
+
+  const targetScreen = isLive ? 'live-match' : 'match-detail';
+
+  return `
+    <div class="match-card fade-in" onclick="selectMatch('${match.id}', '${targetScreen}')">
+      <div class="match-card-header">
+        <span class="match-league">IPL 2026</span>
+        ${statusHtml}
+      </div>
+      <div class="match-card-body">
+        <div class="match-team">
+          <div class="team-logo bg-${codeA.toLowerCase()}">${codeA}</div>
+          <div>
+            <div class="team-name">${shortA}</div>
+            ${scoreA}
+          </div>
+        </div>
+        <div class="match-center">
+          ${centerHtml}
+        </div>
+        <div class="match-team away">
+          <div class="team-logo bg-${codeB.toLowerCase()}">${codeB}</div>
+          <div>
+            <div class="team-name">${shortB}</div>
+            ${scoreB}
+          </div>
+        </div>
+      </div>
+      <div class="match-card-footer">
+        <div style="font-size:11px; color:var(--d11-grey);">
+          ${isCompleted ? 'Match ended' : isLive ? '🔴 Match in progress' : 'Entry ₹25'}
+        </div>
+        <span class="teams-created" style="color:var(--d11-orange);">${isCompleted ? 'Results' : isLive ? 'Watch' : 'Play'}</span>
+      </div>
+    </div>`;
+}
+
+window._selectedMatchId = null;
+function selectMatch(matchId, screen) {
+  window._selectedMatchId = matchId;
+  showScreen(screen);
+}
+
+let _homeMatchesLoaded = false;
+async function loadHomeMatches() {
+  if (typeof D11API === 'undefined') return;
+  const container = document.getElementById('matches-container');
+  if (!container) return;
+
+  try {
+    const matches = await D11API.getMatches();
+    if (!matches || matches.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;">No matches found. Check back soon!</div>';
+      return;
+    }
+
+    const now = new Date();
+    const live = matches.filter(m => m.status === 'live');
+    const upcoming = matches.filter(m => m.status === 'upcoming' && new Date(m.starts_at) > now);
+    const completed = matches.filter(m => m.status === 'completed').reverse().slice(0, 5); // last 5
+
+    let html = '';
+
+    if (live.length > 0) {
+      html += '<div class="section-label">🔴 Live Now</div>';
+      live.forEach(m => html += renderMatchCard(m));
+    }
+
+    if (upcoming.length > 0) {
+      html += '<div class="section-label">Upcoming Matches</div>';
+      upcoming.slice(0, 10).forEach(m => html += renderMatchCard(m));
+    }
+
+    if (completed.length > 0) {
+      html += '<div class="section-label">Recent Results</div>';
+      completed.forEach(m => html += renderMatchCard(m));
+    }
+
+    if (!html) {
+      html = '<div style="text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;">No matches available right now.</div>';
+    }
+
+    container.innerHTML = html;
+    _homeMatchesLoaded = true;
+  } catch (err) {
+    console.error('loadHomeMatches error:', err);
+    container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--d11-red,#E53935);font-size:13px;">Failed to load matches. Pull down to retry.</div>';
+  }
+}
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display = 'none'; });
   const el = document.getElementById('screen-' + id);
@@ -1549,6 +1609,7 @@ function showScreen(id) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.screen === id));
   const createBtn = document.querySelector('.create-team-btn');
   if (createBtn) createBtn.classList.toggle('visible', id === 'match-detail');
+  if (id === 'home') loadHomeMatches();
   if (id === 'team-select') renderPlayers();
   if (id === 'live-match') renderLiveScorecard();
   if (id === 'admin') loadAdminPanel();
