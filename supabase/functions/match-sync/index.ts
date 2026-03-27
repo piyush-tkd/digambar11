@@ -1,7 +1,7 @@
 // ============================================================
 // Edge Function: Match Sync
-// Fetches upcoming/live IPL matches from CricAPI and syncs to DB
-// Also syncs player squads with external_id mapping
+// Fetches upcoming/live IPL matches from Sportmonks (primary)
+// or CricAPI (fallback) and syncs to DB
 // Run daily or on-demand to keep match list current
 // ============================================================
 
@@ -13,7 +13,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-// IPL team code mapping (API team names → our short codes)
+// IPL team code mapping (Sportmonks team names → our short codes)
 const TEAM_MAP: Record<string, { code: string; name: string }> = {
   'Chennai Super Kings':    { code: 'CSK', name: 'Chennai' },
   'Mumbai Indians':         { code: 'MI',  name: 'Mumbai' },
@@ -30,6 +30,7 @@ const TEAM_MAP: Record<string, { code: string; name: string }> = {
 };
 
 function resolveTeam(teamName: string): { code: string; name: string } | null {
+  if (!teamName) return null;
   // Direct match
   if (TEAM_MAP[teamName]) return TEAM_MAP[teamName];
   // Partial match
@@ -38,6 +39,18 @@ function resolveTeam(teamName: string): { code: string; name: string } | null {
     if (lower.includes(key.toLowerCase().split(' ')[0])) return val;
   }
   return null;
+}
+
+// Map Sportmonks status to our status
+function mapStatus(smStatus: string, live: boolean | number): 'upcoming' | 'live' | 'completed' | 'abandoned' {
+  const s = (smStatus || '').toLowerCase();
+  if (s === 'finished' || s === 'won' || s.includes('won')) return 'completed';
+  if (s === 'aban.' || s === 'abandoned' || s.includes('abandon')) return 'abandoned';
+  if (s === 'ns' || s === 'not started' || s === '1st innings' || s === '2nd innings' || s === 'innings break') {
+    return live ? 'live' : 'upcoming';
+  }
+  if (live) return 'live';
+  return 'upcoming';
 }
 
 serve(async (req) => {
@@ -51,216 +64,175 @@ serve(async (req) => {
   }
 
   try {
-    // Get CricAPI config
-    const { data: provider } = await supabase
+    // ============================================
+    // Try Sportmonks first (primary), CricAPI fallback
+    // ============================================
+    const { data: smProvider } = await supabase
+      .from('provider_config')
+      .select('*')
+      .eq('id', 'sportmonks')
+      .single();
+
+    const { data: cdProvider } = await supabase
       .from('provider_config')
       .select('*')
       .eq('id', 'cricketdata')
       .single();
 
-    if (!provider || !provider.api_key || provider.api_key === 'YOUR_CRICKETDATA_API_KEY') {
+    let matchesSynced = 0;
+    let matchesSkipped = 0;
+    let providerUsed = '';
+    let apiCallsMade = 0;
+
+    // ============================================
+    // SPORTMONKS PROVIDER
+    // ============================================
+    if (smProvider?.api_key && smProvider.api_key !== 'YOUR_SPORTMONKS_API_KEY') {
+      providerUsed = 'sportmonks';
+      const token = smProvider.api_key;
+      const baseUrl = smProvider.base_url || 'https://cricket.sportmonks.com/api/v2.0';
+
+      // Step 1: Find IPL league — search all leagues for "Indian Premier League"
+      console.log('Fetching leagues from Sportmonks...');
+      const leaguesRes = await fetch(`${baseUrl}/leagues?api_token=${token}`);
+      const leaguesJson = await leaguesRes.json();
+      apiCallsMade++;
+
+      const iplLeague = (leaguesJson.data || []).find((l: any) =>
+        l.name?.toLowerCase().includes('indian premier league') ||
+        l.code?.toUpperCase() === 'IPL'
+      );
+
+      if (!iplLeague) {
+        console.log('IPL league not found, listing available leagues:',
+          (leaguesJson.data || []).map((l: any) => `${l.id}: ${l.name} (${l.code})`).join(', '));
+
+        // Fallback: try fetching fixtures with date filter for upcoming matches
+        console.log('Trying date-based fixture fetch...');
+        const today = new Date().toISOString().split('T')[0];
+        const futureDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 60 days ahead
+        const fixturesRes = await fetch(
+          `${baseUrl}/fixtures?api_token=${token}&filter[starts_between]=${today},${futureDate}&include=localteam,visitorteam,venue,runs`
+        );
+        const fixturesJson = await fixturesRes.json();
+        apiCallsMade++;
+
+        // Filter for IPL-related fixtures by checking team names
+        const allFixtures = fixturesJson.data || [];
+        const iplFixtures = allFixtures.filter((f: any) => {
+          const local = f.localteam?.data?.name || '';
+          const visitor = f.visitorteam?.data?.name || '';
+          return resolveTeam(local) !== null || resolveTeam(visitor) !== null;
+        });
+
+        for (const f of iplFixtures) {
+          const result = await syncSportmonksFixture(f);
+          if (result) matchesSynced++; else matchesSkipped++;
+        }
+      } else {
+        // Found IPL league — fetch fixtures for current season
+        const seasonId = iplLeague.season_id;
+        console.log(`Found IPL league: id=${iplLeague.id}, season_id=${seasonId}`);
+
+        const fixturesRes = await fetch(
+          `${baseUrl}/fixtures?api_token=${token}&filter[season_id]=${seasonId}&include=localteam,visitorteam,venue,runs`
+        );
+        const fixturesJson = await fixturesRes.json();
+        apiCallsMade++;
+
+        const fixtures = fixturesJson.data || [];
+        console.log(`Found ${fixtures.length} IPL fixtures for season ${seasonId}`);
+
+        // Handle pagination
+        let allFixtures = [...fixtures];
+        let nextPage = fixturesJson.meta?.current_page < fixturesJson.meta?.last_page
+          ? fixturesJson.meta?.current_page + 1
+          : null;
+
+        while (nextPage) {
+          const pageRes = await fetch(
+            `${baseUrl}/fixtures?api_token=${token}&filter[season_id]=${seasonId}&include=localteam,visitorteam,venue,runs&page=${nextPage}`
+          );
+          const pageJson = await pageRes.json();
+          apiCallsMade++;
+          allFixtures = [...allFixtures, ...(pageJson.data || [])];
+          nextPage = pageJson.meta?.current_page < pageJson.meta?.last_page
+            ? pageJson.meta?.current_page + 1
+            : null;
+        }
+
+        for (const f of allFixtures) {
+          const result = await syncSportmonksFixture(f);
+          if (result) matchesSynced++; else matchesSkipped++;
+        }
+      }
+
+      // Update API call count
+      await supabase
+        .from('provider_config')
+        .update({ calls_today: (smProvider.calls_today || 0) + apiCallsMade })
+        .eq('id', 'sportmonks');
+    }
+    // ============================================
+    // CRICAPI FALLBACK
+    // ============================================
+    else if (cdProvider?.api_key && cdProvider.api_key !== 'YOUR_CRICKETDATA_API_KEY') {
+      providerUsed = 'cricketdata';
+      const apiKey = cdProvider.api_key;
+      const baseUrl = cdProvider.base_url || 'https://api.cricapi.com/v1';
+
+      const fetchOpts = {
+        headers: { 'User-Agent': 'Digambar11/1.0', 'Accept': 'application/json' },
+      };
+
+      const currentRes = await fetch(`${baseUrl}/currentMatches?apikey=${apiKey}&offset=0`, fetchOpts);
+      const currentJson = await currentRes.json();
+      apiCallsMade++;
+
+      const upcomingRes = await fetch(`${baseUrl}/matches?apikey=${apiKey}&offset=0`, fetchOpts);
+      const upcomingJson = await upcomingRes.json();
+      apiCallsMade++;
+
+      const allMatches = [...(currentJson.data || []), ...(upcomingJson.data || [])];
+
+      // Filter IPL matches
+      const iplMatches = allMatches.filter((m: any) => {
+        const name = (m.name || '').toLowerCase();
+        const series = (m.series || '').toLowerCase();
+        return name.includes('ipl') || series.includes('ipl')
+          || name.includes('indian premier league') || series.includes('indian premier league');
+      });
+
+      // Deduplicate
+      const seen = new Set<string>();
+      for (const m of iplMatches) {
+        const id = m.id || m.unique_id;
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+
+        const result = await syncCricApiMatch(m);
+        if (result) matchesSynced++; else matchesSkipped++;
+      }
+
+      await supabase
+        .from('provider_config')
+        .update({ calls_today: (cdProvider.calls_today || 0) + apiCallsMade })
+        .eq('id', 'cricketdata');
+    } else {
       return new Response(JSON.stringify({
-        error: 'CricAPI key not configured. Update provider_config table with your API key from https://cricketdata.org',
-        setup_steps: [
-          '1. Sign up at https://cricketdata.org (free = 100 calls/day)',
-          '2. Get your API key from dashboard',
-          '3. Run: UPDATE provider_config SET api_key = \'YOUR_KEY\' WHERE id = \'cricketdata\';',
-        ],
+        error: 'No API keys configured. Update provider_config with Sportmonks or CricketData API keys.',
       }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const apiKey = provider.api_key;
-    const baseUrl = provider.base_url;
-    const results: any[] = [];
-
-    // ============================================
-    // STEP 1: Fetch current/upcoming matches
-    // ============================================
-    // CricAPI v1 endpoints:
-    //   /currentMatches — live + recently completed
-    //   /matches — upcoming + recent
-    //   /series_info — series/tournament info
-
-    // Fetch current matches (live + recent)
-    const currentRes = await fetch(`${baseUrl}/currentMatches?apikey=${apiKey}&offset=0`);
-    const currentJson = await currentRes.json();
-
-    // Fetch upcoming matches
-    const upcomingRes = await fetch(`${baseUrl}/matches?apikey=${apiKey}&offset=0`);
-    const upcomingJson = await upcomingRes.json();
-
-    // Combine and deduplicate
-    const allMatches = [
-      ...(currentJson.data || []),
-      ...(upcomingJson.data || []),
-    ];
-
-    // Filter IPL matches only
-    const iplMatches = allMatches.filter((m: any) => {
-      const name = (m.name || m.series_id || '').toLowerCase();
-      const series = (m.series || m.seriesName || '').toLowerCase();
-      return name.includes('ipl') || series.includes('ipl')
-        || name.includes('indian premier league') || series.includes('indian premier league')
-        || name.includes('t20') && (name.includes('india') || series.includes('india'));
-    });
-
-    // Deduplicate by API match ID
-    const seen = new Set<string>();
-    const uniqueMatches = iplMatches.filter((m: any) => {
-      const id = m.id || m.unique_id;
-      if (!id || seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-
-    let matchesSynced = 0;
-    let matchesSkipped = 0;
-
-    for (const m of uniqueMatches) {
-      const externalId = m.id || m.unique_id;
-      const teams = m.teamInfo || m.teams || [];
-
-      // Try to resolve teams
-      let teamA = null;
-      let teamB = null;
-
-      if (Array.isArray(teams) && teams.length >= 2) {
-        // teamInfo format: [{name: "Chennai Super Kings", shortname: "CSK", img: "..."}]
-        if (teams[0].name) {
-          teamA = resolveTeam(teams[0].name) || { code: teams[0].shortname || teams[0].name.substring(0, 3).toUpperCase(), name: teams[0].name };
-          teamB = resolveTeam(teams[1].name) || { code: teams[1].shortname || teams[1].name.substring(0, 3).toUpperCase(), name: teams[1].name };
-        } else if (typeof teams[0] === 'string') {
-          teamA = resolveTeam(teams[0]) || { code: teams[0].substring(0, 3).toUpperCase(), name: teams[0] };
-          teamB = resolveTeam(teams[1]) || { code: teams[1].substring(0, 3).toUpperCase(), name: teams[1] };
-        }
-      }
-
-      // Fallback: parse from match name (e.g., "Chennai Super Kings vs Mumbai Indians, 28th Match")
-      if (!teamA || !teamB) {
-        const nameMatch = (m.name || '').match(/^(.+?)\s+vs?\s+(.+?),/i);
-        if (nameMatch) {
-          teamA = resolveTeam(nameMatch[1].trim()) || { code: nameMatch[1].trim().substring(0, 3).toUpperCase(), name: nameMatch[1].trim() };
-          teamB = resolveTeam(nameMatch[2].trim()) || { code: nameMatch[2].trim().substring(0, 3).toUpperCase(), name: nameMatch[2].trim() };
-        }
-      }
-
-      if (!teamA || !teamB) {
-        matchesSkipped++;
-        continue;
-      }
-
-      // Map API status to our status
-      let status: 'upcoming' | 'live' | 'completed' | 'abandoned' = 'upcoming';
-      if (m.matchStarted && !m.matchEnded) status = 'live';
-      else if (m.matchEnded) status = 'completed';
-      else if (m.status === 'Match not started') status = 'upcoming';
-
-      // Parse scores from API
-      const scores = m.score || [];
-      const scoreA = scores[0] ? `${scores[0].r}/${scores[0].w} (${scores[0].o})` : '';
-      const scoreB = scores[1] ? `${scores[1].r}/${scores[1].w} (${scores[1].o})` : '';
-
-      // Upsert match
-      const { error: upsertErr } = await supabase
-        .from('matches')
-        .upsert({
-          external_id: externalId,
-          team_a: teamA.code,
-          team_b: teamB.code,
-          team_a_name: teamA.name,
-          team_b_name: teamB.name,
-          venue: m.venue || '',
-          starts_at: m.dateTimeGMT || m.date || new Date().toISOString(),
-          status,
-          score_a: scoreA,
-          score_b: scoreB,
-          result: m.status || null,
-          innings: scores.length,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'external_id',
-        });
-
-      if (upsertErr) {
-        console.error(`Failed to upsert match ${externalId}:`, upsertErr);
-      } else {
-        matchesSynced++;
-      }
-    }
-
-    // ============================================
-    // STEP 2: Sync player external IDs
-    // ============================================
-    // For each live/upcoming match with external_id, try to fetch squad/scorecard
-    // and map player names to external IDs
-    const { data: dbMatches } = await supabase
-      .from('matches')
-      .select('id, external_id, team_a, team_b')
-      .not('external_id', 'is', null)
-      .in('status', ['upcoming', 'live']);
-
-    let playersUpdated = 0;
-
-    for (const match of (dbMatches || [])) {
-      if (!match.external_id) continue;
-
-      try {
-        // Fetch match info/squad from API
-        const infoRes = await fetch(`${baseUrl}/match_info?apikey=${apiKey}&id=${match.external_id}`);
-        const infoJson = await infoRes.json();
-
-        if (infoJson.status !== 'success' || !infoJson.data) continue;
-
-        const teamInfo = infoJson.data.teamInfo || [];
-
-        for (const team of teamInfo) {
-          const teamCode = resolveTeam(team.name)?.code || team.shortname;
-          if (!teamCode) continue;
-
-          // Get squad/players from the API response
-          const squad = team.players || [];
-
-          for (const apiPlayer of squad) {
-            if (!apiPlayer.id || !apiPlayer.name) continue;
-
-            // Try to match by name to our DB players
-            const { data: dbPlayer } = await supabase
-              .from('players')
-              .select('id, external_id')
-              .eq('team', teamCode)
-              .ilike('name', `%${apiPlayer.name.split(' ').pop()}%`)
-              .limit(1)
-              .single();
-
-            if (dbPlayer && !dbPlayer.external_id) {
-              await supabase
-                .from('players')
-                .update({ external_id: apiPlayer.id })
-                .eq('id', dbPlayer.id);
-              playersUpdated++;
-            }
-          }
-        }
-      } catch (err) {
-        console.error(`Failed to sync players for match ${match.id}:`, err);
-      }
-    }
-
-    // Update API call count
-    await supabase
-      .from('provider_config')
-      .update({ calls_today: (provider.calls_today || 0) + 3 }) // ~3 API calls made
-      .eq('id', 'cricketdata');
-
     const response = {
       success: true,
-      matches_found: uniqueMatches.length,
+      provider: providerUsed,
       matches_synced: matchesSynced,
       matches_skipped: matchesSkipped,
-      players_updated: playersUpdated,
-      api_calls_used: provider.calls_today + 3,
-      api_calls_limit: provider.rate_limit_per_day,
+      api_calls_made: apiCallsMade,
     };
+
+    console.log('Sync complete:', JSON.stringify(response));
 
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -274,3 +246,117 @@ serve(async (req) => {
     });
   }
 });
+
+// ============================================
+// Sync a single Sportmonks fixture to DB
+// ============================================
+async function syncSportmonksFixture(f: any): Promise<boolean> {
+  const localTeamName = f.localteam?.data?.name || '';
+  const visitorTeamName = f.visitorteam?.data?.name || '';
+
+  const teamA = resolveTeam(localTeamName);
+  const teamB = resolveTeam(visitorTeamName);
+
+  if (!teamA || !teamB) return false;
+
+  const status = mapStatus(f.status, f.live);
+
+  // Parse scores from runs include
+  let scoreA = '';
+  let scoreB = '';
+  const runs = f.runs?.data || [];
+  if (runs.length > 0) {
+    const team1Runs = runs.find((r: any) => r.team_id === f.localteam_id);
+    const team2Runs = runs.find((r: any) => r.team_id === f.visitorteam_id);
+    if (team1Runs) scoreA = `${team1Runs.score}/${team1Runs.wickets} (${team1Runs.overs})`;
+    if (team2Runs) scoreB = `${team2Runs.score}/${team2Runs.wickets} (${team2Runs.overs})`;
+  }
+
+  const { error } = await supabase
+    .from('matches')
+    .upsert({
+      external_id: String(f.id),
+      team_a: teamA.code,
+      team_b: teamB.code,
+      team_a_name: teamA.name,
+      team_b_name: teamB.name,
+      venue: f.venue?.data?.name || '',
+      starts_at: f.starting_at || new Date().toISOString(),
+      status,
+      score_a: scoreA,
+      score_b: scoreB,
+      result: f.note || null,
+      innings: runs.length,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'external_id',
+    });
+
+  if (error) {
+    console.error(`Failed to upsert fixture ${f.id}:`, error);
+    return false;
+  }
+  return true;
+}
+
+// ============================================
+// Sync a single CricAPI match to DB (fallback)
+// ============================================
+async function syncCricApiMatch(m: any): Promise<boolean> {
+  const externalId = m.id || m.unique_id;
+  const teams = m.teamInfo || m.teams || [];
+
+  let teamA = null;
+  let teamB = null;
+
+  if (Array.isArray(teams) && teams.length >= 2) {
+    if (teams[0].name) {
+      teamA = resolveTeam(teams[0].name) || { code: teams[0].shortname || teams[0].name.substring(0, 3).toUpperCase(), name: teams[0].name };
+      teamB = resolveTeam(teams[1].name) || { code: teams[1].shortname || teams[1].name.substring(0, 3).toUpperCase(), name: teams[1].name };
+    }
+  }
+
+  if (!teamA || !teamB) {
+    const nameMatch = (m.name || '').match(/^(.+?)\s+vs?\s+(.+?),/i);
+    if (nameMatch) {
+      teamA = resolveTeam(nameMatch[1].trim());
+      teamB = resolveTeam(nameMatch[2].trim());
+    }
+  }
+
+  if (!teamA || !teamB) return false;
+
+  let status: 'upcoming' | 'live' | 'completed' | 'abandoned' = 'upcoming';
+  if (m.matchStarted && !m.matchEnded) status = 'live';
+  else if (m.matchEnded) status = 'completed';
+
+  const scores = m.score || [];
+  const scoreA = scores[0] ? `${scores[0].r}/${scores[0].w} (${scores[0].o})` : '';
+  const scoreB = scores[1] ? `${scores[1].r}/${scores[1].w} (${scores[1].o})` : '';
+
+  const { error } = await supabase
+    .from('matches')
+    .upsert({
+      external_id: String(externalId),
+      team_a: teamA.code,
+      team_b: teamB.code,
+      team_a_name: teamA.name,
+      team_b_name: teamB.name,
+      venue: m.venue || '',
+      starts_at: m.dateTimeGMT || m.date || new Date().toISOString(),
+      status,
+      score_a: scoreA,
+      score_b: scoreB,
+      result: m.status || null,
+      innings: scores.length,
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: 'external_id',
+    });
+
+  if (error) {
+    console.error(`Failed to upsert match ${externalId}:`, error);
+    return false;
+  }
+  return true;
+}

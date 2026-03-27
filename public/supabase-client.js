@@ -514,24 +514,130 @@
   };
 
   // ====== ADMIN / SYNC MODULE ======
+  // ====== CRICAPI CONFIG ======
+  const CRICAPI_KEY = '8f172a1b-912d-40ba-b476-e71e0d1d35bf';
+  const CRICAPI_BASE = 'https://api.cricapi.com/v1';
+
+  // IPL team code mapping
+  const TEAM_MAP = {
+    'Chennai Super Kings':    { code: 'CSK', name: 'Chennai' },
+    'Mumbai Indians':         { code: 'MI',  name: 'Mumbai' },
+    'Royal Challengers':      { code: 'RCB', name: 'Bangalore' },
+    'Royal Challengers Bengaluru': { code: 'RCB', name: 'Bangalore' },
+    'Royal Challengers Bangalore': { code: 'RCB', name: 'Bangalore' },
+    'Kolkata Knight Riders':  { code: 'KKR', name: 'Kolkata' },
+    'Delhi Capitals':         { code: 'DC',  name: 'Delhi' },
+    'Sunrisers Hyderabad':    { code: 'SRH', name: 'Hyderabad' },
+    'Rajasthan Royals':       { code: 'RR',  name: 'Rajasthan' },
+    'Punjab Kings':           { code: 'PBKS', name: 'Punjab' },
+    'Gujarat Titans':         { code: 'GT',  name: 'Gujarat' },
+    'Lucknow Super Giants':   { code: 'LSG', name: 'Lucknow' },
+  };
+
+  function resolveTeam(teamName) {
+    if (!teamName) return null;
+    if (TEAM_MAP[teamName]) return TEAM_MAP[teamName];
+    const lower = teamName.toLowerCase();
+    for (const [key, val] of Object.entries(TEAM_MAP)) {
+      if (lower.includes(key.toLowerCase().split(' ')[0])) return val;
+    }
+    return null;
+  }
+
   const Admin = {
-    // Trigger match sync from CricAPI (fetches real IPL fixtures)
+    // Sync IPL matches from CricAPI directly (client-side)
+    // CricAPI is blocked from Supabase Edge Functions but works from browsers
     async syncMatches() {
       const sb = await initSupabase();
-      const { data: { session } } = await sb.auth.getSession();
-      const token = session?.access_token || SUPABASE_ANON_KEY;
+      console.log('Fetching IPL matches from CricAPI...');
 
-      const res = await fetch(`${FUNCTIONS_URL}/match-sync`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      return await res.json();
+      try {
+        // Fetch current + upcoming matches
+        const [currentRes, upcomingRes] = await Promise.all([
+          fetch(`${CRICAPI_BASE}/currentMatches?apikey=${CRICAPI_KEY}&offset=0`),
+          fetch(`${CRICAPI_BASE}/matches?apikey=${CRICAPI_KEY}&offset=0`),
+        ]);
+        const currentJson = await currentRes.json();
+        const upcomingJson = await upcomingRes.json();
+
+        const allMatches = [...(currentJson.data || []), ...(upcomingJson.data || [])];
+
+        // Filter IPL matches
+        const iplMatches = allMatches.filter(m => {
+          const name = (m.name || '').toLowerCase();
+          return name.includes('indian premier league') || name.includes('ipl');
+        });
+
+        // Deduplicate by ID
+        const seen = new Set();
+        const uniqueMatches = [];
+        for (const m of iplMatches) {
+          const id = m.id || m.unique_id;
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          uniqueMatches.push(m);
+        }
+
+        console.log(`Found ${uniqueMatches.length} IPL matches from CricAPI`);
+
+        // Build match records for bulk upsert
+        const matchRecords = [];
+        for (const m of uniqueMatches) {
+          const teams = m.teams || [];
+          const teamA = resolveTeam(teams[0]);
+          const teamB = resolveTeam(teams[1]);
+          if (!teamA || !teamB) continue;
+
+          let status = 'upcoming';
+          if (m.matchStarted && !m.matchEnded) status = 'live';
+          else if (m.matchEnded) status = 'completed';
+
+          const scores = m.score || [];
+          const scoreA = scores[0] ? `${scores[0].r}/${scores[0].w} (${scores[0].o})` : '';
+          const scoreB = scores[1] ? `${scores[1].r}/${scores[1].w} (${scores[1].o})` : '';
+
+          matchRecords.push({
+            external_id: String(m.id || m.unique_id),
+            team_a: teamA.code,
+            team_b: teamB.code,
+            team_a_name: teamA.name,
+            team_b_name: teamB.name,
+            venue: m.venue || '',
+            starts_at: m.dateTimeGMT || new Date().toISOString(),
+            status,
+            score_a: scoreA,
+            score_b: scoreB,
+            result: m.status || null,
+            innings: scores.length,
+          });
+        }
+
+        // Bulk upsert via Supabase RPC (SECURITY DEFINER function)
+        const { data, error } = await sb.rpc('bulk_upsert_matches', {
+          matches: matchRecords,
+        });
+
+        if (error) {
+          console.error('Bulk upsert failed:', error);
+          return { success: false, error: error.message };
+        }
+
+        const result = {
+          success: true,
+          provider: 'cricketdata',
+          matches_synced: data?.synced || matchRecords.length,
+          matches_skipped: data?.failed || 0,
+          api_calls_made: 2,
+        };
+        console.log('Match sync complete:', result);
+        return result;
+      } catch (err) {
+        console.error('Match sync failed:', err);
+        return { success: false, error: String(err) };
+      }
     },
 
-    // Trigger live score ingestion (updates scores from API)
+    // Trigger live score ingestion via Edge Function
     async triggerScoreIngestion() {
       const res = await fetch(`${FUNCTIONS_URL}/score-ingestion`, {
         method: 'POST',
@@ -545,14 +651,15 @@
 
     // Check provider status
     async getProviderStatus() {
-      const sb = await initSupabase();
-      // provider_config is not accessible via anon key (no RLS policy)
-      // So we return what we can check
       try {
-        const syncResult = await fetch(`${FUNCTIONS_URL}/match-sync`, {
-          method: 'OPTIONS',
-        });
-        return { reachable: syncResult.ok };
+        const res = await fetch(`${CRICAPI_BASE}/matches?apikey=${CRICAPI_KEY}&offset=0`);
+        const data = await res.json();
+        return {
+          reachable: data.status === 'success',
+          provider: 'cricketdata',
+          hitsToday: data.info?.hitsToday || 0,
+          hitsLimit: data.info?.hitsLimit || 100,
+        };
       } catch {
         return { reachable: false };
       }
