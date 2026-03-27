@@ -1428,8 +1428,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <!-- Auto-Sync Status -->
       <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:4px;">⏰ Auto-Sync</div>
-        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Matches auto-sync every 6 hours via Supabase pg_cron</div>
-        <div id="admin-autosync-status" style="font-size:13px;color:var(--d11-green);font-weight:600;">Active — runs at 6 AM, 12 PM, 6 PM, 12 AM IST</div>
+        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Matches auto-sync every 6h + 25 min before match times via pg_cron</div>
+        <div id="admin-autosync-status" style="font-size:13px;color:var(--d11-green);font-weight:600;">Active — every 6h + pre-match at 3:05 PM & 7:05 PM IST</div>
       </div>
 
       <!-- Live Score Updates -->

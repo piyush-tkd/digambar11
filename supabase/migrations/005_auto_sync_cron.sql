@@ -92,11 +92,12 @@ SELECT cron.schedule(
   $$SELECT auto_sync_matches()$$
 );
 
--- Also run a match sync 30 minutes before common IPL match times
+-- Also run a match sync 25 minutes before common IPL match times
 -- IPL matches typically start at 7:30 PM IST (14:00 UTC) and 3:30 PM IST (10:00 UTC)
+-- 25 min before: 3:05 PM IST (9:35 UTC) and 7:05 PM IST (13:35 UTC)
 SELECT cron.schedule(
   'pre-match-sync',
-  '30 9,13 * * *',  -- 3:00 PM IST and 7:00 PM IST (30 min before match)
+  '35 9,13 * * *',  -- 3:05 PM IST and 7:05 PM IST (25 min before match)
   $$SELECT auto_sync_matches()$$
 );
 
