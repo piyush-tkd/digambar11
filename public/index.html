@@ -1572,7 +1572,19 @@ function renderPlayers() {
   const roleCounts2 = roleCounts;
   const valid = totalSelected === 11 && roleCounts2.WK >= 1 && roleCounts2.BAT >= 3 && roleCounts2.AR >= 1 && roleCounts2.BWL >= 3;
   btn.className = 'next-btn ' + (valid ? 'enabled' : 'disabled');
-  btn.textContent = valid ? 'NEXT → Choose Captain' : `NEXT → (${totalSelected}/11 players)`;
+  if (valid) {
+    btn.textContent = 'NEXT → Choose Captain';
+  } else if (totalSelected === 11) {
+    // 11 selected but role minimums not met
+    const missing = [];
+    if (roleCounts2.WK < 1) missing.push('WK');
+    if (roleCounts2.BAT < 3) missing.push('BAT');
+    if (roleCounts2.AR < 1) missing.push('AR');
+    if (roleCounts2.BWL < 3) missing.push('BWL');
+    btn.textContent = `Need more: ${missing.join(', ')}`;
+  } else {
+    btn.textContent = `NEXT → (${totalSelected}/11 players)`;
+  }
 }
 
 function togglePlayer(id) {
@@ -1597,6 +1609,16 @@ function sortByPoints() { renderPlayers(); }
 // ====== CAPTAIN SELECTION ======
 function goToCaptainSelect() {
   if (selectedPlayers.length !== 11) return;
+  // Validate role minimums
+  const rc = { WK: 0, BAT: 0, AR: 0, BWL: 0 };
+  selectedPlayers.forEach(p => rc[p.role] = (rc[p.role] || 0) + 1);
+  const mins = { WK: 1, BAT: 3, AR: 1, BWL: 3 };
+  const missing = Object.entries(mins).filter(([r, m]) => (rc[r] || 0) < m);
+  if (missing.length > 0) {
+    const msg = missing.map(([r, m]) => `${r}: need ${m}, have ${rc[r]||0}`).join(', ');
+    showToast(`Fix team composition: ${msg}`);
+    return;
+  }
   captainId = null;
   viceCaptainId = null;
   showScreen('captain');
@@ -1927,6 +1949,21 @@ function switchLiveTab(tab) {
 // Helper: format points to avoid floating point display artifacts (e.g. -20.799999999999955 → -20.8)
 function fmtPts(v) { return parseFloat(Number(v).toFixed(1)); }
 function fmtPtsStr(v) { return Number(v).toFixed(1); }
+
+// Toast notification helper
+function showToast(msg, duration = 3000) {
+  let toast = document.getElementById('d11-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'd11-toast';
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity 0.3s;max-width:90%;text-align:center;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
+}
 
 function renderLiveScorecard() {
   const list = document.getElementById('live-scorecard-list');
