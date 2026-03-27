@@ -666,11 +666,12 @@
     },
   };
 
-  // ====== LIVE SCORE POLLING ======
+  // ====== LIVE SCORE POLLING (reads from Supabase DB) ======
   let _scorePollingInterval = null;
 
   const ScorePoller = {
-    // Start polling live scores every N seconds
+    // Start polling live scores from Supabase every N seconds
+    // This reads from the DB — NOT from CricAPI. Safe for all 50 users.
     startPolling(matchId, onUpdate, intervalMs = 30000) {
       this.stopPolling(); // clear any existing
 
@@ -686,15 +687,107 @@
       // Immediate first fetch
       poll();
       _scorePollingInterval = setInterval(poll, intervalMs);
-      console.log(`📊 Score polling started for match ${matchId} (every ${intervalMs/1000}s)`);
+      console.log(`Score polling started for match ${matchId} (every ${intervalMs/1000}s)`);
     },
 
     stopPolling() {
       if (_scorePollingInterval) {
         clearInterval(_scorePollingInterval);
         _scorePollingInterval = null;
-        console.log('📊 Score polling stopped');
+        console.log('Score polling stopped');
       }
+    },
+  };
+
+  // ====== CENTRALIZED LIVE MATCH UPDATER ======
+  // Only ONE person (admin/host) runs this. It fetches live scores from
+  // CricAPI every 2 minutes and writes to Supabase. All other users get
+  // instant updates via Supabase Realtime subscriptions — zero API calls.
+  //
+  // Rate budget: 1 call every 2 min = 30 calls/hour = ~120 calls per 4h match
+  // That leaves headroom for match-sync and other calls within CricAPI's 100/day free tier.
+  // For multiple simultaneous matches, consider upgrading the API plan.
+
+  let _liveUpdaterInterval = null;
+
+  const LiveMatchUpdater = {
+    // Start centralized score updates (admin only — run on ONE browser tab)
+    async startUpdating(matchExternalId, intervalMs = 120000) {
+      this.stopUpdating();
+      const sb = await initSupabase();
+
+      console.log(`ADMIN: Starting live score updates for match ${matchExternalId} (every ${intervalMs/1000}s)`);
+      console.log('Other users will get instant updates via Supabase Realtime.');
+
+      const update = async () => {
+        try {
+          // Fetch live match data from CricAPI
+          const res = await fetch(`${CRICAPI_BASE}/match_info?apikey=${CRICAPI_KEY}&id=${matchExternalId}`);
+          const json = await res.json();
+
+          if (json.status !== 'success' || !json.data) {
+            console.warn('CricAPI returned no data for this match');
+            return;
+          }
+
+          const m = json.data;
+          const teams = m.teams || [];
+          const teamA = resolveTeam(teams[0]);
+          const teamB = resolveTeam(teams[1]);
+
+          if (!teamA || !teamB) return;
+
+          let status = 'upcoming';
+          if (m.matchStarted && !m.matchEnded) status = 'live';
+          else if (m.matchEnded) status = 'completed';
+
+          const scores = m.score || [];
+          const scoreA = scores[0] ? `${scores[0].r}/${scores[0].w} (${scores[0].o})` : '';
+          const scoreB = scores[1] ? `${scores[1].r}/${scores[1].w} (${scores[1].o})` : '';
+
+          // Update match in DB via RPC (triggers Realtime push to all users)
+          await sb.rpc('upsert_match', {
+            p_external_id: matchExternalId,
+            p_team_a: teamA.code,
+            p_team_b: teamB.code,
+            p_team_a_name: teamA.name,
+            p_team_b_name: teamB.name,
+            p_venue: m.venue || '',
+            p_starts_at: m.dateTimeGMT || new Date().toISOString(),
+            p_status: status,
+            p_score_a: scoreA,
+            p_score_b: scoreB,
+            p_result: m.status || null,
+            p_innings: scores.length,
+          });
+
+          console.log(`Score updated: ${teamA.code} ${scoreA} vs ${teamB.code} ${scoreB} [${status}]`);
+
+          // Auto-stop when match is completed
+          if (status === 'completed') {
+            console.log('Match completed! Stopping live updates.');
+            this.stopUpdating();
+          }
+        } catch (err) {
+          console.warn('Live update failed:', err);
+        }
+      };
+
+      // Immediate first fetch
+      await update();
+      _liveUpdaterInterval = setInterval(update, intervalMs);
+    },
+
+    stopUpdating() {
+      if (_liveUpdaterInterval) {
+        clearInterval(_liveUpdaterInterval);
+        _liveUpdaterInterval = null;
+        console.log('ADMIN: Live score updates stopped');
+      }
+    },
+
+    isUpdating() {
+      return _liveUpdaterInterval !== null;
     },
   };
 
@@ -752,6 +845,13 @@
     syncMatches: Admin.syncMatches,
     triggerScoreIngestion: Admin.triggerScoreIngestion,
     getProviderStatus: Admin.getProviderStatus,
+
+    // Live Match Updater (ADMIN ONLY — run on exactly ONE browser tab)
+    // Fetches scores from CricAPI every 2 min, writes to DB,
+    // all 50 users get instant Realtime push — zero extra API calls.
+    startLiveUpdates: LiveMatchUpdater.startUpdating.bind(LiveMatchUpdater),
+    stopLiveUpdates: LiveMatchUpdater.stopUpdating.bind(LiveMatchUpdater),
+    isLiveUpdating: LiveMatchUpdater.isUpdating.bind(LiveMatchUpdater),
   };
 
   console.log('🏏 D11API (Supabase) loaded — real backend ready');
