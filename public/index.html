@@ -1486,8 +1486,9 @@ function renderMatchCard(match) {
   const codeB = getTeamCode(match.team_b);
   const shortA = getTeamShort(match.team_a_name || match.team_a);
   const shortB = getTeamShort(match.team_b_name || match.team_b);
-  const isLive = match.status === 'live';
-  const isCompleted = match.status === 'completed';
+  const effectiveStatus = match._effectiveStatus || match.status;
+  const isLive = effectiveStatus === 'live';
+  const isCompleted = effectiveStatus === 'completed';
 
   let statusHtml, centerHtml;
   if (isLive) {
@@ -1567,9 +1568,19 @@ async function loadHomeMatches() {
     }
 
     const now = new Date();
-    const live = matches.filter(m => m.status === 'live');
-    const upcoming = matches.filter(m => m.status === 'upcoming' && new Date(m.starts_at) > now);
-    const completed = matches.filter(m => m.status === 'completed').reverse().slice(0, 5); // last 5
+    // Derive effective status from date (DB status may be stale/wrong)
+    // A match is ~3.5 hours, so "live" = started within last 4 hours
+    const MATCH_DURATION_MS = 4 * 60 * 60 * 1000;
+    matches.forEach(m => {
+      const start = new Date(m.starts_at);
+      const elapsed = now - start;
+      if (elapsed < 0) m._effectiveStatus = 'upcoming';           // hasn't started
+      else if (elapsed < MATCH_DURATION_MS) m._effectiveStatus = 'live';  // in progress
+      else m._effectiveStatus = 'completed';                       // finished
+    });
+    const live = matches.filter(m => m._effectiveStatus === 'live');
+    const upcoming = matches.filter(m => m._effectiveStatus === 'upcoming');
+    const completed = matches.filter(m => m._effectiveStatus === 'completed').reverse().slice(0, 5);
 
     let html = '';
 
