@@ -2048,11 +2048,21 @@ function adminLog(msg) {
 }
 
 function isAdmin() {
-  const user = localStorage.getItem('d11_user');
-  if (!user) return false;
   try {
-    const u = JSON.parse(user);
-    return u.email === ADMIN_EMAIL;
+    // Check Supabase auth token for email
+    const keys = Object.keys(localStorage);
+    const authKey = keys.find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+    if (authKey) {
+      const token = JSON.parse(localStorage.getItem(authKey) || '{}');
+      if (token?.user?.email === ADMIN_EMAIL) return true;
+    }
+    // Fallback: check d11_user
+    const user = localStorage.getItem('d11_user');
+    if (user) {
+      const u = JSON.parse(user);
+      if (u.email === ADMIN_EMAIL) return true;
+    }
+    return false;
   } catch { return false; }
 }
 
