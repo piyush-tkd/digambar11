@@ -2817,18 +2817,19 @@ function isOAuthCallback(hash) {
   return hash && (hash.includes('access_token=') || hash.includes('error='));
 }
 
+let _appInitialized = false;
+const _authScreens = ['home', 'my-matches', 'leaderboard', 'wallet', 'profile', 'match-detail', 'team-select', 'squad-setup', 'admin', 'live-match'];
+
 function initRouter() {
   window.addEventListener('hashchange', () => {
     const hash = window.location.hash.slice(1) || 'splash';
-    // Don't treat OAuth callback hashes as screen navigation
     if (isOAuthCallback(hash)) return;
+    // Block navigation to auth screens before login check completes
+    if (!_appInitialized && _authScreens.includes(hash)) return;
     showScreen(hash);
   });
-  // Handle initial hash (but not OAuth callbacks)
-  const initialHash = window.location.hash.slice(1);
-  if (initialHash && initialHash !== 'splash' && !isOAuthCallback(initialHash)) {
-    setTimeout(() => showScreen(initialHash), 100);
-  }
+  // Don't auto-navigate on initial load — let initApp() handle it
+  // This prevents the flash of home/dashboard before login check
 }
 
 // Override showScreen to update hash
@@ -2844,6 +2845,7 @@ showScreen = function(id) {
 async function initApp() {
   if (typeof D11API === 'undefined') {
     // No API available, just show login after splash
+    _appInitialized = true;
     setTimeout(() => showScreen('login'), 2000);
     return;
   }
@@ -2864,6 +2866,7 @@ async function initApp() {
     // Check if user is logged in (either existing session or just-completed OAuth)
     const user = await D11API.getUser();
     if (user) {
+      _appInitialized = true;
       if (user.squadName) {
         // Returning user — go to home
         window.userName = user.name;
@@ -2884,6 +2887,7 @@ async function initApp() {
   }
 
   // Not logged in — show login after splash
+  _appInitialized = true;
   setTimeout(() => showScreen('login'), 2000);
 }
 
