@@ -1,0 +1,38 @@
+{
+  "name": "digambar11-e2e-tests",
+  "version": "1.0.0",
+  "description": "Playwright E2E test suite for Digambar 11 Fantasy Cricket App",
+  "scripts": {
+    "test": "npx playwright test --config=playwright.config.ts",
+    "test:mobile": "npx playwright test --config=playwright.config.ts --project='Mobile Chrome'",
+    "test:desktop": "npx playwright test --config=playwright.config.ts --project='Desktop Chrome'",
+    "test:auth": "npx playwright test --config=playwright.config.ts e2e/auth/",
+    "test:nav": "npx playwright test --config=playwright.config.ts e2e/navigation/",
+    "test:team": "npx playwright test --config=playwright.config.ts e2e/team-builder/",
+    "test:captain": "npx playwright test --config=playwright.config.ts e2e/captain-selection/",
+    "test:live": "npx playwright test --config=playwright.config.ts e2e/live-match/",
+    "test:wallet": "npx playwright test --config=playwright.config.ts e2e/wallet/",
+    "test:profile": "npx playwright test --config=playwright.config.ts e2e/profile/",
+    "test:friends": "npx playwright test --config=playwright.config.ts e2e/friends/",
+    "test:leaderboard": "npx playwright test --config=playwright.config.ts e2e/leaderboard/",
+    "test:match": "npx playwright test --config=playwright.config.ts e2e/match/",
+    "test:scoring": "npx playwright test --config=playwright.config.ts e2e/scoring/",
+    "test:api": "npx playwright test --config=playwright.config.ts e2e/api/",
+    "test:perf": "npx playwright test --config=playwright.config.ts e2e/performance/",
+    "test:responsive": "npx playwright test --config=playwright.config.ts e2e/responsive/",
+    "test:a11y": "npx playwright test --config=playwright.config.ts e2e/accessibility/",
+    "test:errors": "npx playwright test --config=playwright.config.ts e2e/error-handling/",
+    "test:edge": "npx playwright test --config=playwright.config.ts e2e/edge-cases/",
+    "test:pwa": "npx playwright test --config=playwright.config.ts e2e/pwa/",
+    "test:realtime": "npx playwright test --config=playwright.config.ts e2e/realtime/",
+    "test:compare": "npx playwright test --config=playwright.config.ts e2e/compare/",
+    "test:report": "npx playwright show-report test-results/html-report",
+    "test:headed": "npx playwright test --config=playwright.config.ts --headed",
+    "test:debug": "npx playwright test --config=playwright.config.ts --debug",
+    "install": "npx playwright install"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "typescript": "^5.5.0"
+  }
+}
