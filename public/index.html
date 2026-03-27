@@ -572,8 +572,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="header-left">
         <div class="back-btn" onclick="showScreen('home')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
-          <div class="header-title">CSK vs MI</div>
-          <div class="header-subtitle">Tomorrow, 7:30 PM • Chepauk</div>
+          <div class="header-title" id="md-header-title">Match</div>
+          <div class="header-subtitle" id="md-header-sub">Loading...</div>
         </div>
       </div>
       <div class="header-right">
@@ -584,17 +584,17 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     <div class="match-banner">
       <div class="match-banner-teams">
         <div class="banner-team">
-          <div class="banner-team-logo bg-csk">CSK</div>
-          <div class="banner-team-name">Chennai</div>
+          <div class="banner-team-logo" id="md-logo-a">A</div>
+          <div class="banner-team-name" id="md-name-a">Team A</div>
         </div>
         <div class="banner-vs">VS</div>
         <div class="banner-team">
-          <div class="banner-team-logo bg-mi">MI</div>
-          <div class="banner-team-name">Mumbai</div>
+          <div class="banner-team-logo" id="md-logo-b">B</div>
+          <div class="banner-team-name" id="md-name-b">Team B</div>
         </div>
       </div>
-      <div class="match-countdown">Match starts in</div>
-      <div class="countdown-timer" id="countdown">19h 30m 45s</div>
+      <div class="match-countdown" id="md-countdown-label">Match starts in</div>
+      <div class="countdown-timer" id="countdown">--</div>
     </div>
 
     <div class="contest-tabs" id="match-tabs">
@@ -723,7 +723,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div class="back-btn" onclick="showScreen('match-detail')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
           <div class="header-title" style="font-size:15px;">Create Team</div>
-          <div class="header-subtitle">CSK vs MI</div>
+          <div class="header-subtitle" id="ts-match-sub">Select Players</div>
         </div>
       </div>
       <div class="header-right">
@@ -751,10 +751,10 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div class="comp-count" id="cc-ar"><div class="dot" style="background:#27AE60"></div><div class="role">AR</div><div class="num">0</div></div>
         <div class="comp-count" id="cc-bwl"><div class="dot" style="background:#9B59B6"></div><div class="role">BWL</div><div class="num">0</div></div>
       </div>
-      <div class="team-split">
-        <div class="team-split-side"><div class="team-split-count bg-csk" id="csk-count">0</div> CSK</div>
+      <div class="team-split" id="team-split-bar">
+        <div class="team-split-side"><div class="team-split-count" id="teamA-count">0</div> <span id="teamA-label">Team A</span></div>
         <span style="color:var(--d11-grey); font-size:12px;">•</span>
-        <div class="team-split-side"><div class="team-split-count bg-mi" id="mi-count">0</div> MI</div>
+        <div class="team-split-side"><div class="team-split-count" id="teamB-count">0</div> <span id="teamB-label">Team B</span></div>
       </div>
     </div>
 
@@ -1431,7 +1431,11 @@ const PLAYERS = {
   ]
 };
 
-const TEAM_COLORS = { CSK: '#FFCB05', MI: '#004BA0' };
+const TEAM_COLORS = {
+  CSK: '#FFCB05', MI: '#004BA0', RCB: '#D4213D', KKR: '#3A225D',
+  DC: '#004C93', SRH: '#FF822A', RR: '#EA1A85', PBKS: '#ED1B24',
+  GT: '#1C1C2B', LSG: '#A72056'
+};
 
 // ====== STATE ======
 let selectedPlayers = [];
@@ -1549,9 +1553,97 @@ function renderMatchCard(match) {
 }
 
 window._selectedMatchId = null;
+window._selectedMatch = null;
+window._matchPlayers = null; // { teamA: [...], teamB: [...] }
+
 function selectMatch(matchId, screen) {
   window._selectedMatchId = matchId;
+  // Find the match from already-loaded data
+  if (window._allMatches) {
+    window._selectedMatch = window._allMatches.find(m => m.id === matchId) || null;
+  }
   showScreen(screen);
+}
+
+async function loadMatchDetail() {
+  const match = window._selectedMatch;
+  if (!match) return;
+
+  const codeA = getTeamCode(match.team_a);
+  const codeB = getTeamCode(match.team_b);
+  const shortA = getTeamShort(match.team_a_name || match.team_a);
+  const shortB = getTeamShort(match.team_b_name || match.team_b);
+
+  // Update header
+  document.getElementById('md-header-title').textContent = codeA + ' vs ' + codeB;
+  const start = new Date(match.starts_at);
+  const venue = match.venue || '';
+  const dateStr = start.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeStr = start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  document.getElementById('md-header-sub').textContent = dateStr + ', ' + timeStr + (venue ? ' • ' + venue : '');
+
+  // Update banner logos
+  const logoA = document.getElementById('md-logo-a');
+  logoA.textContent = codeA;
+  logoA.className = 'banner-team-logo bg-' + codeA.toLowerCase();
+  document.getElementById('md-name-a').textContent = shortA;
+
+  const logoB = document.getElementById('md-logo-b');
+  logoB.textContent = codeB;
+  logoB.className = 'banner-team-logo bg-' + codeB.toLowerCase();
+  document.getElementById('md-name-b').textContent = shortB;
+
+  // Update countdown
+  const diff = start - new Date();
+  const countdownEl = document.getElementById('countdown');
+  const labelEl = document.getElementById('md-countdown-label');
+  if (diff > 0) {
+    labelEl.textContent = 'Match starts in';
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    countdownEl.textContent = (d > 0 ? d + 'd ' : '') + h + 'h ' + m + 'm ' + s + 's';
+  } else {
+    labelEl.textContent = match._effectiveStatus === 'live' ? 'Match in progress' : 'Match ended';
+    countdownEl.textContent = match.result || '';
+  }
+
+  // Preload players for team selection
+  if (typeof D11API !== 'undefined') {
+    try {
+      const players = await D11API.getPlayersByMatch(match.id);
+      const teamAPlayers = players.filter(p => p.team === match.team_a);
+      const teamBPlayers = players.filter(p => p.team === match.team_b);
+      window._matchPlayers = { teamA: match.team_a, teamB: match.team_b, players: players };
+      // Update the PLAYERS object for compatibility with existing renderPlayers
+      PLAYERS[codeA] = teamAPlayers.map(p => ({
+        name: p.name, role: p.role, credit: parseFloat(p.credit),
+        overseas: p.overseas, pts: parseFloat(p.season_pts || 0),
+        selPct: parseFloat(p.sel_pct || 0), id: p.id
+      }));
+      PLAYERS[codeB] = teamBPlayers.map(p => ({
+        name: p.name, role: p.role, credit: parseFloat(p.credit),
+        overseas: p.overseas, pts: parseFloat(p.season_pts || 0),
+        selPct: parseFloat(p.sel_pct || 0), id: p.id
+      }));
+      // Clear old team data to avoid showing wrong teams
+      Object.keys(PLAYERS).forEach(k => {
+        if (k !== codeA && k !== codeB) delete PLAYERS[k];
+      });
+      // Update team split labels
+      document.getElementById('teamA-label').textContent = codeA;
+      document.getElementById('teamB-label').textContent = codeB;
+      const cntA = document.getElementById('teamA-count');
+      cntA.className = 'team-split-count bg-' + codeA.toLowerCase();
+      const cntB = document.getElementById('teamB-count');
+      cntB.className = 'team-split-count bg-' + codeB.toLowerCase();
+      // Update team-select header
+      document.getElementById('ts-match-sub').textContent = codeA + ' vs ' + codeB;
+    } catch (err) {
+      console.error('Failed to load players for match:', err);
+    }
+  }
 }
 
 let _homeMatchesLoaded = false;
@@ -1604,6 +1696,7 @@ async function loadHomeMatches() {
     }
 
     container.innerHTML = html;
+    window._allMatches = matches;
     _homeMatchesLoaded = true;
   } catch (err) {
     console.error('loadHomeMatches error:', err);
@@ -1621,7 +1714,8 @@ function showScreen(id) {
   const createBtn = document.querySelector('.create-team-btn');
   if (createBtn) createBtn.classList.toggle('visible', id === 'match-detail');
   if (id === 'home') loadHomeMatches();
-  if (id === 'team-select') renderPlayers();
+  if (id === 'match-detail') loadMatchDetail();
+  if (id === 'team-select') { resetTeamSelection(); renderPlayers(); }
   if (id === 'live-match') renderLiveScorecard();
   if (id === 'admin') loadAdminPanel();
   if (id === 'profile') {
@@ -1633,11 +1727,19 @@ function showScreen(id) {
 function navTo(id) { showScreen(id); }
 
 // ====== TEAM SELECTION ======
+function resetTeamSelection() {
+  selectedPlayers = [];
+  captainId = null;
+  viceCaptainId = null;
+  currentRole = 'WK';
+  document.querySelectorAll('.role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === 'WK'));
+}
+
 function getAllPlayers() {
   let all = [];
   Object.entries(PLAYERS).forEach(([team, players]) => {
     players.forEach((p, i) => {
-      all.push({ ...p, team, id: team + '-' + i });
+      all.push({ ...p, team, id: p.id || (team + '-' + i) });
     });
   });
   return all;
@@ -1658,8 +1760,11 @@ function renderPlayers() {
   const overseasCount = selectedPlayers.filter(p => p.overseas).length;
   const roleCounts = { WK: 0, BAT: 0, AR: 0, BWL: 0 };
   selectedPlayers.forEach(p => roleCounts[p.role]++);
-  const teamCounts = { CSK: 0, MI: 0 };
-  selectedPlayers.forEach(p => teamCounts[p.team]++);
+  // Dynamic team counts based on current match
+  const teamKeys = Object.keys(PLAYERS);
+  const teamCounts = {};
+  teamKeys.forEach(k => teamCounts[k] = 0);
+  selectedPlayers.forEach(p => { if (teamCounts[p.team] !== undefined) teamCounts[p.team]++; });
 
   list.innerHTML = players.map(p => {
     const isSelected = selectedPlayers.some(sp => sp.id === p.id);
@@ -1696,8 +1801,11 @@ function renderPlayers() {
   document.getElementById('selected-count').textContent = totalSelected;
   document.getElementById('credits-left').textContent = creditsRemaining.toFixed(1);
   document.getElementById('overseas-count').textContent = overseasCount;
-  document.getElementById('csk-count').textContent = teamCounts.CSK;
-  document.getElementById('mi-count').textContent = teamCounts.MI;
+  // Update dynamic team counts
+  if (teamKeys.length >= 2) {
+    document.getElementById('teamA-count').textContent = teamCounts[teamKeys[0]] || 0;
+    document.getElementById('teamB-count').textContent = teamCounts[teamKeys[1]] || 0;
+  }
 
   // Composition counts
   ['wk','bat','ar','bwl'].forEach(r => {
@@ -2823,7 +2931,9 @@ completeSetup = async function() {
 const _originalConfirmTeam = confirmTeam;
 confirmTeam = async function() {
   if (typeof D11API !== 'undefined') {
-    const result = await D11API.saveTeam('match-28', selectedPlayers, captainId, viceCaptainId);
+    const matchId = window._selectedMatchId || 'match-28';
+    const playerIds = selectedPlayers.map(p => p.id);
+    const result = await D11API.saveTeam(matchId, playerIds, captainId, viceCaptainId);
     if (result.success) {
       showScreen('match-detail');
       return;
