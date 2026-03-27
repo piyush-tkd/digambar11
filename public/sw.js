@@ -1,9 +1,9 @@
 // Digambar 11 Service Worker — PWA offline support
-const CACHE_NAME = 'digambar11-v1';
+const CACHE_NAME = 'digambar11-v2';
 const ASSETS = [
   '/',
   '/index.html',
-  '/api.js',
+  '/supabase-client.js',
   '/manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap'
 ];

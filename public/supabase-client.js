@@ -1,6 +1,6 @@
 // ============================================================
 // Digambar11 — Supabase Client Integration
-// Replaces mock api.js with real Supabase backend
+// Supabase backend — all Sportmonks API calls go through Edge Functions
 //
 // SETUP: Replace SUPABASE_URL and SUPABASE_ANON_KEY below
 //        with your actual Supabase project credentials
@@ -520,7 +520,7 @@
 
   const Admin = {
     // ============================================================
-    // Sync IPL matches via Edge Function (Sportmonks primary, CricAPI fallback)
+    // Sync IPL matches via Edge Function (Sportmonks API)
     // The Edge Function runs server-side — no CORS issues with Sportmonks.
     // ============================================================
     async syncMatches() {
@@ -720,7 +720,7 @@
     getProviderStatus: Admin.getProviderStatus.bind(Admin),
 
     // Live Match Updater (ADMIN ONLY — run on exactly ONE browser tab)
-    // Fetches scores from CricAPI every 2 min, writes to DB,
+    // Fetches scores from Sportmonks every 30s via Edge Function, writes to DB,
     // all 50 users get instant Realtime push — zero extra API calls.
     startLiveUpdates: LiveMatchUpdater.startUpdating.bind(LiveMatchUpdater),
     stopLiveUpdates: LiveMatchUpdater.stopUpdating.bind(LiveMatchUpdater),
