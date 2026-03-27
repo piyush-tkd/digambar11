@@ -1,5 +1,5 @@
 // Digambar 11 Service Worker — PWA offline support
-const CACHE_NAME = 'digambar11-v2';
+const CACHE_NAME = 'digambar11-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -25,6 +25,21 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Network-first for HTML/documents so users always get fresh content
+  if (event.request.destination === 'document' || event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then((response) => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Cache-first for other assets (JS, CSS, fonts, images)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       return cached || fetch(event.request).then((response) => {
@@ -33,11 +48,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => {
-        if (event.request.destination === 'document') {
-          return caches.match('/index.html');
-        }
-      });
+      }).catch(() => {});
     })
   );
 });
