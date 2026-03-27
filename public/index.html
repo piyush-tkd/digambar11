@@ -2336,14 +2336,21 @@ if ('serviceWorker' in navigator) {
 }
 
 // ====== HASH ROUTING (enables browser back/forward) ======
+// Helper: check if hash contains Supabase OAuth tokens
+function isOAuthCallback(hash) {
+  return hash && (hash.includes('access_token=') || hash.includes('error='));
+}
+
 function initRouter() {
   window.addEventListener('hashchange', () => {
     const hash = window.location.hash.slice(1) || 'splash';
+    // Don't treat OAuth callback hashes as screen navigation
+    if (isOAuthCallback(hash)) return;
     showScreen(hash);
   });
-  // Handle initial hash
+  // Handle initial hash (but not OAuth callbacks)
   const initialHash = window.location.hash.slice(1);
-  if (initialHash && initialHash !== 'splash') {
+  if (initialHash && initialHash !== 'splash' && !isOAuthCallback(initialHash)) {
     setTimeout(() => showScreen(initialHash), 100);
   }
 }
@@ -2359,30 +2366,63 @@ showScreen = function(id) {
 
 // ====== API INTEGRATION (uses D11API when available) ======
 async function initApp() {
-  if (typeof D11API !== 'undefined') {
-    // Check if user is already logged in
+  if (typeof D11API === 'undefined') {
+    // No API available, just show login after splash
+    setTimeout(() => showScreen('login'), 2000);
+    return;
+  }
+
+  try {
+    // Initialize Supabase (this also parses OAuth tokens from URL hash)
+    if (D11API.init) await D11API.init();
+
+    // Clean up OAuth hash fragments from URL
+    const hash = window.location.hash;
+    if (isOAuthCallback(hash.slice(1))) {
+      // Give Supabase a moment to process the tokens
+      await new Promise(r => setTimeout(r, 500));
+      // Clear the hash so the router doesn't get confused
+      history.replaceState(null, '', window.location.pathname);
+    }
+
+    // Check if user is logged in (either existing session or just-completed OAuth)
     const user = await D11API.getUser();
-    if (user && user.squadName) {
-      // Skip splash and login, go to home
-      window.userName = user.name;
-      window.userSquadName = user.squadName;
-      updateSquadNameUI();
-      setTimeout(() => showScreen('home'), 500);
+    if (user) {
+      if (user.squadName) {
+        // Returning user — go to home
+        window.userName = user.name;
+        window.userSquadName = user.squadName;
+        updateSquadNameUI();
+        showScreen('home');
+      } else {
+        // New user (just signed up via OAuth) — go to squad setup
+        window.userName = user.name || user.email || 'Player';
+        document.getElementById('setup-name').value = window.userName;
+        showScreen('squad-setup');
+        generateSuggestions();
+      }
       return;
     }
+  } catch (err) {
+    console.error('initApp error:', err);
   }
-  // Normal splash → login flow
+
+  // Not logged in — show login after splash
   setTimeout(() => showScreen('login'), 2000);
 }
 
-// Override googleLogin to use API
+// Override googleLogin to use API (Supabase OAuth redirects the page)
 const _originalGoogleLogin = googleLogin;
 googleLogin = async function() {
   if (typeof D11API !== 'undefined') {
-    const user = await D11API.googleLogin();
-    if (user) {
-      showScreen('squad-setup');
-      generateSuggestions();
+    try {
+      // This redirects the browser to Google OAuth — page will reload
+      await D11API.googleLogin();
+      // If we get here, redirect is happening. Show a loading state.
+      return;
+    } catch (err) {
+      console.error('Google login error:', err);
+      alert('Login failed: ' + (err.message || err));
       return;
     }
   }
@@ -2439,10 +2479,10 @@ function doLogout() {
 }
 
 // Replace splash auto-nav with API-aware init
-// Defer initApp until after api.js loads (it's at the bottom of the page)
+// Defer initApp until after supabase-client.js loads (it's at the bottom of the page)
 window.addEventListener('load', () => {
-  initApp();
   initRouter();
+  initApp();
 });
 
 // ====== LIVE SCORES SIMULATION ======
@@ -2481,6 +2521,6 @@ showScreen = function(id) {
   if (id === 'live-match') startLiveSimulation();
 };
 </script>
-<script src="./api.js"></script>
+<script src="./supabase-client.js"></script>
 </body>
 </html>
