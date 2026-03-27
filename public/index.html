@@ -1262,6 +1262,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         </label>
       </div>
       <div class="profile-menu-item" onclick="showScreen('scoring')"><svg viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg><span>Scoring Rules</span><span class="arrow">›</span></div>
+      <div class="profile-menu-item" id="admin-menu-item" style="display:none;" onclick="showScreen('admin')"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg><span>Admin Panel</span><span class="arrow">›</span></div>
       <div class="profile-menu-item" onclick="doLogout()"><svg viewBox="0 0 24 24"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg><span>Logout</span><span class="arrow">›</span></div>
     </div>
   </div>
@@ -1399,6 +1400,70 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     </div>
   </div>
 
+  <!-- Admin Panel (hidden — only for bahetipiyush@gmail.com) -->
+  <div class="screen" id="screen-admin" style="display:none;">
+    <div class="header" style="background:linear-gradient(135deg,#1a1a2e,#16213e);">
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;">
+        <div class="back-btn" onclick="showScreen('profile')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
+        <div style="flex:1;"><div style="font-size:18px;font-weight:800;">⚙️ Admin Panel</div><div style="font-size:11px;color:var(--d11-grey);">Sportmonks API Management</div></div>
+      </div>
+    </div>
+    <div class="content" style="padding:16px;gap:12px;">
+      <!-- API Status Card -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;">📡 API Status</div>
+        <div id="admin-api-status" style="font-size:13px;color:var(--d11-grey);">Checking...</div>
+      </div>
+
+      <!-- Match Sync -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">🔄 Match Sync</div>
+        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Fetch all IPL fixtures from Sportmonks and update the database</div>
+        <button id="admin-sync-btn" onclick="adminSyncMatches()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--d11-blue);color:white;font-size:14px;font-weight:700;cursor:pointer;">
+          Sync All Matches
+        </button>
+        <div id="admin-sync-result" style="font-size:12px;color:var(--d11-grey);margin-top:8px;"></div>
+      </div>
+
+      <!-- Auto-Sync Status -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">⏰ Auto-Sync</div>
+        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Matches auto-sync every 6 hours via Supabase pg_cron</div>
+        <div id="admin-autosync-status" style="font-size:13px;color:var(--d11-green);font-weight:600;">Active — runs at 6 AM, 12 PM, 6 PM, 12 AM IST</div>
+      </div>
+
+      <!-- Live Score Updates -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">🔴 Live Score Updates</div>
+        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Start real-time score polling for a live match (every 30s via Edge Function)</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="admin-match-id" placeholder="Match External ID (e.g. sm_12345)" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--d11-border);background:var(--d11-surface);color:var(--d11-white);font-size:13px;">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button id="admin-live-start" onclick="adminStartLive()" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--d11-green);color:white;font-size:13px;font-weight:700;cursor:pointer;">
+            ▶ Start Live
+          </button>
+          <button id="admin-live-stop" onclick="adminStopLive()" style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--d11-red);color:white;font-size:13px;font-weight:700;cursor:pointer;">
+            ■ Stop
+          </button>
+        </div>
+        <div id="admin-live-result" style="font-size:12px;color:var(--d11-grey);margin-top:8px;"></div>
+      </div>
+
+      <!-- Live Matches Quick Start -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📋 Live/Upcoming Matches</div>
+        <div id="admin-match-list" style="font-size:13px;color:var(--d11-grey);">Loading...</div>
+      </div>
+
+      <!-- Sync Log -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📝 Sync Log</div>
+        <div id="admin-log" style="font-size:11px;color:var(--d11-grey);max-height:200px;overflow-y:auto;font-family:monospace;white-space:pre-wrap;"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Bottom Nav -->
   <div class="bottom-nav" id="bottom-nav">
     <div class="nav-item active" data-screen="home" onclick="navTo('home')">
@@ -1480,6 +1545,11 @@ function showScreen(id) {
   if (createBtn) createBtn.classList.toggle('visible', id === 'match-detail');
   if (id === 'team-select') renderPlayers();
   if (id === 'live-match') renderLiveScorecard();
+  if (id === 'admin') loadAdminPanel();
+  if (id === 'profile') {
+    const adminItem = document.getElementById('admin-menu-item');
+    if (adminItem) adminItem.style.display = isAdmin() ? 'flex' : 'none';
+  }
 }
 
 function navTo(id) { showScreen(id); }
@@ -1963,6 +2033,141 @@ function showToast(msg, duration = 3000) {
   toast.style.opacity = '1';
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, duration);
+}
+
+// ====== ADMIN PANEL ======
+const ADMIN_EMAIL = 'bahetipiyush@gmail.com';
+let _adminLogLines = [];
+
+function adminLog(msg) {
+  const ts = new Date().toLocaleTimeString();
+  _adminLogLines.unshift(`[${ts}] ${msg}`);
+  if (_adminLogLines.length > 50) _adminLogLines.pop();
+  const el = document.getElementById('admin-log');
+  if (el) el.textContent = _adminLogLines.join('\n');
+}
+
+function isAdmin() {
+  const user = localStorage.getItem('d11_user');
+  if (!user) return false;
+  try {
+    const u = JSON.parse(user);
+    return u.email === ADMIN_EMAIL;
+  } catch { return false; }
+}
+
+async function loadAdminPanel() {
+  adminLog('Loading admin panel...');
+
+  // Check API status
+  const statusEl = document.getElementById('admin-api-status');
+  try {
+    const result = await D11API.getProviderStatus();
+    statusEl.innerHTML = `<span style="color:var(--d11-green);font-weight:600;">✓ ${result.provider || 'Sportmonks'} connected</span>`;
+    adminLog('API status: connected');
+  } catch {
+    statusEl.innerHTML = '<span style="color:var(--d11-red);">✗ API unreachable</span>';
+    adminLog('API status: unreachable');
+  }
+
+  // Load live/upcoming matches for quick-start
+  const listEl = document.getElementById('admin-match-list');
+  try {
+    const matches = await D11API.getMatches();
+    const relevant = (matches || []).filter(m => m.status === 'live' || m.status === 'upcoming').slice(0, 8);
+    if (relevant.length === 0) {
+      listEl.textContent = 'No live or upcoming matches found.';
+    } else {
+      listEl.innerHTML = relevant.map(m => {
+        const isLive = m.status === 'live';
+        const badge = isLive ? '<span style="color:var(--d11-red);font-weight:700;">● LIVE</span>' : '<span style="color:var(--d11-blue);">Upcoming</span>';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--d11-border);">
+          <div><span style="font-weight:600;">${m.team_a} vs ${m.team_b}</span> ${badge}</div>
+          <button onclick="document.getElementById('admin-match-id').value='${m.external_id}';adminLog('Selected match ${m.external_id}: ${m.team_a} vs ${m.team_b}');" style="padding:4px 10px;border-radius:6px;border:1px solid var(--d11-border);background:transparent;color:var(--d11-light);font-size:11px;cursor:pointer;">Select</button>
+        </div>`;
+      }).join('');
+    }
+    adminLog(`Loaded ${relevant.length} matches`);
+  } catch (err) {
+    listEl.textContent = 'Failed to load matches.';
+    adminLog('Error loading matches: ' + err);
+  }
+
+  // Check live updater status
+  if (D11API.isLiveUpdating()) {
+    document.getElementById('admin-live-result').innerHTML = '<span style="color:var(--d11-green);">● Live updates running</span>';
+  }
+}
+
+async function adminSyncMatches() {
+  const btn = document.getElementById('admin-sync-btn');
+  const result = document.getElementById('admin-sync-result');
+  btn.textContent = 'Syncing...';
+  btn.disabled = true;
+  adminLog('Starting match sync...');
+
+  try {
+    const res = await D11API.syncMatches();
+    result.innerHTML = `<span style="color:var(--d11-green);">✓ Synced ${res.matches_synced || 0} matches (${res.provider || '?'}, ${res.api_calls_made || 0} API calls)</span>`;
+    adminLog(`Sync complete: ${res.matches_synced} synced, ${res.matches_skipped} skipped, ${res.api_calls_made} API calls`);
+    loadAdminPanel(); // refresh match list
+  } catch (err) {
+    result.innerHTML = `<span style="color:var(--d11-red);">✗ Sync failed: ${err}</span>`;
+    adminLog('Sync failed: ' + err);
+  }
+  btn.textContent = 'Sync All Matches';
+  btn.disabled = false;
+}
+
+async function adminStartLive() {
+  const matchId = document.getElementById('admin-match-id').value.trim();
+  if (!matchId) { showToast('Enter a match external ID'); return; }
+  const result = document.getElementById('admin-live-result');
+  result.innerHTML = '<span style="color:var(--d11-blue);">Starting live updates...</span>';
+  adminLog(`Starting live updates for ${matchId}...`);
+
+  try {
+    await D11API.startLiveUpdates(matchId);
+    result.innerHTML = '<span style="color:var(--d11-green);">● Live updates running (every 30s)</span>';
+    adminLog(`Live updates started for ${matchId}`);
+  } catch (err) {
+    result.innerHTML = `<span style="color:var(--d11-red);">✗ Failed: ${err}</span>`;
+    adminLog('Live start failed: ' + err);
+  }
+}
+
+function adminStopLive() {
+  D11API.stopLiveUpdates();
+  document.getElementById('admin-live-result').innerHTML = '<span style="color:var(--d11-grey);">Stopped</span>';
+  adminLog('Live updates stopped');
+}
+
+// Triple-tap D11 logo to access admin (hidden entry point)
+let _adminTapCount = 0;
+let _adminTapTimer = null;
+document.addEventListener('click', (e) => {
+  const logo = e.target.closest('.header-logo, [onclick*="home"]');
+  if (!logo || !logo.closest('.header')) return;
+  _adminTapCount++;
+  clearTimeout(_adminTapTimer);
+  _adminTapTimer = setTimeout(() => { _adminTapCount = 0; }, 800);
+  if (_adminTapCount >= 5) {
+    _adminTapCount = 0;
+    if (isAdmin()) {
+      showScreen('admin');
+      loadAdminPanel();
+    } else {
+      showToast('Admin access restricted');
+    }
+  }
+});
+
+// Handle #admin URL hash
+if (window.location.hash === '#admin') {
+  setTimeout(() => {
+    if (isAdmin()) { showScreen('admin'); loadAdminPanel(); }
+    else { showToast('Admin access restricted'); showScreen('home'); }
+  }, 500);
 }
 
 function renderLiveScorecard() {
