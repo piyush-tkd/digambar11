@@ -513,6 +513,84 @@
     },
   };
 
+  // ====== ADMIN / SYNC MODULE ======
+  const Admin = {
+    // Trigger match sync from CricAPI (fetches real IPL fixtures)
+    async syncMatches() {
+      const sb = await initSupabase();
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token || SUPABASE_ANON_KEY;
+
+      const res = await fetch(`${FUNCTIONS_URL}/match-sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return await res.json();
+    },
+
+    // Trigger live score ingestion (updates scores from API)
+    async triggerScoreIngestion() {
+      const res = await fetch(`${FUNCTIONS_URL}/score-ingestion`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      return await res.json();
+    },
+
+    // Check provider status
+    async getProviderStatus() {
+      const sb = await initSupabase();
+      // provider_config is not accessible via anon key (no RLS policy)
+      // So we return what we can check
+      try {
+        const syncResult = await fetch(`${FUNCTIONS_URL}/match-sync`, {
+          method: 'OPTIONS',
+        });
+        return { reachable: syncResult.ok };
+      } catch {
+        return { reachable: false };
+      }
+    },
+  };
+
+  // ====== LIVE SCORE POLLING ======
+  let _scorePollingInterval = null;
+
+  const ScorePoller = {
+    // Start polling live scores every N seconds
+    startPolling(matchId, onUpdate, intervalMs = 30000) {
+      this.stopPolling(); // clear any existing
+
+      const poll = async () => {
+        try {
+          const scores = await LiveScores.getLiveScores(matchId);
+          if (onUpdate) onUpdate(scores);
+        } catch (err) {
+          console.warn('Score poll failed:', err);
+        }
+      };
+
+      // Immediate first fetch
+      poll();
+      _scorePollingInterval = setInterval(poll, intervalMs);
+      console.log(`📊 Score polling started for match ${matchId} (every ${intervalMs/1000}s)`);
+    },
+
+    stopPolling() {
+      if (_scorePollingInterval) {
+        clearInterval(_scorePollingInterval);
+        _scorePollingInterval = null;
+        console.log('📊 Score polling stopped');
+      }
+    },
+  };
+
   // ====== EXPOSE PUBLIC API ======
   window.D11API = {
     // Init
@@ -548,6 +626,10 @@
     subscribeToMatch: LiveScores.subscribeToMatch,
     unsubscribeLive: LiveScores.unsubscribe,
 
+    // Score Polling (alternative to Realtime for live updates)
+    startScorePolling: ScorePoller.startPolling.bind(ScorePoller),
+    stopScorePolling: ScorePoller.stopPolling.bind(ScorePoller),
+
     // Wallet
     getBalance: Wallet.getBalance,
     getTransactions: Wallet.getTransactions,
@@ -558,7 +640,13 @@
 
     // Friends
     getFriends: Friends.getFriends,
+
+    // Admin / Sync (for triggering API data sync)
+    syncMatches: Admin.syncMatches,
+    triggerScoreIngestion: Admin.triggerScoreIngestion,
+    getProviderStatus: Admin.getProviderStatus,
   };
 
   console.log('🏏 D11API (Supabase) loaded — real backend ready');
+  console.log('💡 To connect live data: D11API.syncMatches() — fetches real IPL fixtures from CricAPI');
 })();

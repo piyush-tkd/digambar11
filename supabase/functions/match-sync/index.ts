@@ -13,7 +13,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-// IPL team code mapping (API team names â our short codes)
+// IPL team code mapping (API team names → our short codes)
 const TEAM_MAP: Record<string, { code: string; name: string }> = {
   'Chennai Super Kings':    { code: 'CSK', name: 'Chennai' },
   'Mumbai Indians':         { code: 'MI',  name: 'Mumbai' },
@@ -77,9 +77,9 @@ serve(async (req) => {
     // STEP 1: Fetch current/upcoming matches
     // ============================================
     // CricAPI v1 endpoints:
-    //   /currentMatches â live + recently completed
-    //   /matches â upcoming + recent
-    //   /series_info â series/tournament info
+    //   /currentMatches — live + recently completed
+    //   /matches — upcoming + recent
+    //   /series_info — series/tournament info
 
     // Fetch current matches (live + recent)
     const currentRes = await fetch(`${baseUrl}/currentMatches?apikey=${apiKey}&offset=0`);

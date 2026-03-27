@@ -2,7 +2,7 @@
 -- API Setup: Connect Real-Time Cricket Data
 --
 -- STEP 1: Get a free API key from https://cricketdata.org
---         (Sign up â Dashboard â Copy API Key)
+--         (Sign up → Dashboard → Copy API Key)
 --         Free tier = 100 API calls/day (enough for ~3 live matches)
 --
 -- STEP 2: Replace 'YOUR_CRICKETDATA_API_KEY' below with your real key
@@ -13,16 +13,16 @@
 
 -- Update CricketData.org (primary provider)
 UPDATE provider_config
-SET api_key = 'YOUR_CRICKETDATA_API_KEY',  -- â REPLACE THIS
+SET api_key = 'YOUR_CRICKETDATA_API_KEY',  -- ← REPLACE THIS
     base_url = 'https://api.cricapi.com/v1',
     is_primary = TRUE,
     enabled = TRUE,
     rate_limit_per_day = 100
 WHERE id = 'cricketdata';
 
--- Update Sportmonks (fallback provider) â optional
+-- Update Sportmonks (fallback provider) — optional
 UPDATE provider_config
-SET api_key = 'YOUR_SPORTMONKS_API_KEY',  -- â REPLACE THIS (optional)
+SET api_key = 'YOUR_SPORTMONKS_API_KEY',  -- ← REPLACE THIS (optional)
     base_url = 'https://cricket.sportmonks.com/api/v2.0',
     is_primary = FALSE,
     enabled = FALSE,  -- Enable when you have a key
@@ -41,7 +41,7 @@ WHERE id = 'sportmonks';
 
 -- ============================================================
 -- Cron Job: Auto-sync matches daily
--- (Requires pg_cron extension â enabled on Supabase Pro)
+-- (Requires pg_cron extension — enabled on Supabase Pro)
 -- For free tier, call match-sync manually or via external cron
 -- ============================================================
 -- SELECT cron.schedule(
@@ -59,7 +59,7 @@ WHERE id = 'sportmonks';
 
 -- ============================================================
 -- Cron Job: Ingest live scores every 30 seconds during matches
--- (Requires pg_cron â for free tier, use external scheduler)
+-- (Requires pg_cron — for free tier, use external scheduler)
 -- ============================================================
 -- SELECT cron.schedule(
 --   'ingest-live-scores',
