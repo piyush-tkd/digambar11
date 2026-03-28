@@ -602,17 +602,13 @@
       }
     },
 
-    // Trigger live score update for a specific match via Edge Function
+    // Trigger live score update via Vercel serverless function
     async triggerLiveUpdate(matchExternalId) {
       console.log(`Triggering live update for match ${matchExternalId}...`);
       try {
-        const res = await fetch(`${FUNCTIONS_URL}/live-score`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ match_external_id: matchExternalId }),
+        const res = await fetch('/api/live-score', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
         });
         return await res.json();
       } catch (err) {
@@ -688,7 +684,7 @@
       this.stopUpdating();
 
       console.log(`ADMIN: Starting live score updates for match ${matchExternalId} (every ${intervalMs/1000}s)`);
-      console.log('All calls go through Edge Function (no CORS). Users get Realtime push.');
+      console.log('All calls go through Vercel serverless function. Users get Realtime push.');
 
       const update = async () => {
         try {
