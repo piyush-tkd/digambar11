@@ -52,6 +52,7 @@ CREATE TABLE matches (
   score_a TEXT DEFAULT '',  -- e.g. '182/4 (20.0)'
   score_b TEXT DEFAULT '',
   result TEXT,              -- e.g. 'CSK won by 5 wickets'
+  espn_id TEXT,             -- ESPNCricinfo match ID for live score fetching
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
