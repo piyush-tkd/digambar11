@@ -2020,15 +2020,15 @@ async function loadLiveMatchData() {
     } catch(e) { console.warn('Failed to fetch live matches:', e); }
   }
 
-  // If still upcoming but within 30 min, try to refresh from DB
-  if (match && match.status === 'upcoming' && typeof D11API !== 'undefined') {
+  // ALWAYS refresh from DB for live/upcoming matches to get latest scores
+  if (match && typeof D11API !== 'undefined') {
     try {
       const freshMatch = await D11API.getMatch(match.id);
       if (freshMatch) {
         match = freshMatch;
         window._selectedMatch = freshMatch;
       }
-    } catch(e) {}
+    } catch(e) { console.warn('Failed to refresh match:', e); }
   }
 
   if (!match) {

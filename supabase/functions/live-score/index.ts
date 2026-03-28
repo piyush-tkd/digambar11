@@ -97,9 +97,19 @@ serve(async (req) => {
     const res = await fetch(url);
     const json = await res.json();
 
+    // DEBUG: Log raw Sportmonks response keys and status
+    console.log('Raw Sportmonks response keys:', Object.keys(json));
+    if (json.data) {
+      console.log('Fixture status:', json.data.status, 'live:', json.data.live);
+      console.log('Fixture localteam_id:', json.data.localteam_id, 'visitorteam_id:', json.data.visitorteam_id);
+      console.log('Runs data:', JSON.stringify(json.data.runs));
+      console.log('Batting data count:', Array.isArray(json.data.batting?.data) ? json.data.batting.data.length : (Array.isArray(json.data.batting) ? json.data.batting.length : 'none'));
+      console.log('Scoreboards:', JSON.stringify(json.data.scoreboards)?.substring(0, 500));
+    }
+
     if (!json.data) {
-      console.warn('No fixture data returned for ID:', fixtureId);
-      return new Response(JSON.stringify({ success: false, error: 'Fixture not found' }), {
+      console.warn('No fixture data returned for ID:', fixtureId, 'Response:', JSON.stringify(json).substring(0, 500));
+      return new Response(JSON.stringify({ success: false, error: 'Fixture not found', raw: JSON.stringify(json).substring(0, 300) }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -130,12 +140,40 @@ serve(async (req) => {
     const localTeamId = f.localteam_id || f.localteam?.id;
     const visitorTeamId = f.visitorteam_id || f.visitorteam?.id;
 
-    if (Array.isArray(runs)) {
+    console.log('localTeamId:', localTeamId, 'visitorTeamId:', visitorTeamId, 'runs length:', Array.isArray(runs) ? runs.length : 'not array');
+
+    if (Array.isArray(runs) && runs.length > 0) {
       const team1Runs = runs.find((r: any) => r.team_id === localTeamId);
       const team2Runs = runs.find((r: any) => r.team_id === visitorTeamId);
       if (team1Runs) scoreA = `${team1Runs.score}/${team1Runs.wickets} (${team1Runs.overs})`;
       if (team2Runs) scoreB = `${team2Runs.score}/${team2Runs.wickets} (${team2Runs.overs})`;
     }
+
+    // Fallback: try scoreboards if runs are empty
+    if (!scoreA && !scoreB) {
+      const scoreboards = f.scoreboards?.data || f.scoreboards || [];
+      if (Array.isArray(scoreboards) && scoreboards.length > 0) {
+        console.log('Using scoreboards fallback, count:', scoreboards.length);
+        // Scoreboards have type "total" with team_id, score, wickets, overs
+        const totals = scoreboards.filter((s: any) => s.type === 'total');
+        const team1Total = totals.find((s: any) => s.team_id === localTeamId);
+        const team2Total = totals.find((s: any) => s.team_id === visitorTeamId);
+        if (team1Total) scoreA = `${team1Total.total}/${team1Total.wickets} (${team1Total.overs})`;
+        if (team2Total) scoreB = `${team2Total.total}/${team2Total.wickets} (${team2Total.overs})`;
+      }
+    }
+
+    // Fallback 2: try fixture-level score fields
+    if (!scoreA && !scoreB) {
+      if (f.localteam_dl_data?.score || f.localteam_dl_data?.total) {
+        scoreA = `${f.localteam_dl_data.score || f.localteam_dl_data.total}`;
+      }
+      if (f.visitorteam_dl_data?.score || f.visitorteam_dl_data?.total) {
+        scoreB = `${f.visitorteam_dl_data.score || f.visitorteam_dl_data.total}`;
+      }
+    }
+
+    console.log('Final scores — A:', scoreA, 'B:', scoreB);
 
     // Upsert match in DB (triggers Realtime push to all subscribed clients)
     const { error: upsertError } = await supabase
@@ -179,6 +217,10 @@ serve(async (req) => {
       match_external_id: matchExternalId,
       team_a: teamA.code,
       team_b: teamB.code,
+      debug_fixture_status: f.status,
+      debug_fixture_live: f.live,
+      debug_runs_count: Array.isArray(runs) ? runs.length : 0,
+      debug_fixture_note: f.note || null,
       score_a: scoreA,
       score_b: scoreB,
       status,
