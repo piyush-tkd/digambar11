@@ -175,6 +175,7 @@ serve(async (req) => {
         vice_captain_id,
         impact_player_id: impact_player_id || null,
         total_credits: totalCredits,
+        total_points: 0,
       }, {
         onConflict: 'user_id,match_id',
       })

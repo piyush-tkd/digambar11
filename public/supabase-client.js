@@ -255,6 +255,7 @@
         vice_captain_id: viceCaptainId,
         impact_player_id: impactPlayerId || null,
         total_credits: totalCredits,
+        total_points: 0,
       }, { onConflict: 'user_id,match_id' }).select().single();
 
       if (teamErr || !team) return { success: false, errors: ['Failed to save team: ' + (teamErr?.message || 'unknown')] };

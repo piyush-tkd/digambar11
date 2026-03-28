@@ -1,5 +1,5 @@
 // Digambar 11 Service Worker — PWA offline support
-const CACHE_NAME = 'digambar11-v5';
+const CACHE_NAME = 'digambar11-v6';
 const ASSETS = [
   '/',
   '/index.html',

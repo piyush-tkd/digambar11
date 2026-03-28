@@ -40,8 +40,7 @@
   --d11-light: #333344;
   --d11-grey: #6B6B80;
 }
-[data-theme="light"] .status-bar { background: var(--d11-red); }
-[data-theme="light"] .status-bar .icons svg { fill: white; }
+/* status-bar removed — was mock UI */
 [data-theme="light"] .bottom-nav { background: #FFFFFF; border-top: 1px solid rgba(0,0,0,0.08); }
 [data-theme="light"] .match-card-header { background: rgba(0,0,0,0.02); border-bottom: 1px solid rgba(0,0,0,0.06); }
 [data-theme="light"] .match-card-footer { background: rgba(0,0,0,0.02); border-top: 1px solid rgba(0,0,0,0.06); }
@@ -87,10 +86,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .app { width: 100%; max-width: 430px; height: 100vh; margin: 0 auto; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--d11-darker); }
 
 /* Status Bar */
-.status-bar { height: 44px; background: var(--d11-dark); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 12px; font-weight: 600; flex-shrink: 0; }
-.status-bar .time { font-weight: 700; }
-.status-bar .icons { display: flex; gap: 5px; align-items: center; }
-.status-bar .icons svg { width: 16px; height: 16px; fill: white; }
+/* .status-bar removed — was mock phone UI */
 
 /* Header */
 .header { background: linear-gradient(135deg, var(--d11-red) 0%, #C41420 100%); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -439,14 +435,6 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 <div class="app" id="app">
 
   <!-- Status Bar -->
-  <div class="status-bar">
-    <span class="time">9:41</span>
-    <div class="icons">
-      <svg viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
-      <svg viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg>
-    </div>
-  </div>
-
   <!-- ===== SCREEN: SPLASH ===== -->
   <div class="screen active" id="screen-splash" style="justify-content:center;align-items:center;background:linear-gradient(180deg, var(--d11-red) 0%, #8B0000 100%);">
     <div style="text-align:center;animation:fadeIn 0.8s ease;">
@@ -1614,7 +1602,7 @@ function showScreen(id) {
   if (id === 'home') loadHomeMatches();
   if (id === 'match-detail') loadMatchDetail();
   if (id === 'team-select') { resetTeamSelection(); renderPlayers(); }
-  if (id === 'live-match') renderLiveScorecard();
+  if (id === 'live-match') loadLiveMatchData();
   if (id === 'my-matches') loadMyMatches();
   if (id === 'admin') loadAdminPanel();
   if (id === 'profile') {
@@ -2014,6 +2002,215 @@ function switchLiveTab(tab) {
 
 // Helper: format points to avoid floating point display artifacts (e.g. -20.799999999999955 → -20.8)
 function fmtPts(v) { return parseFloat(Number(v).toFixed(1)); }
+
+// ====== LOAD LIVE MATCH DATA FROM DB ======
+let _liveMatchPollInterval = null;
+
+async function loadLiveMatchData() {
+  // 1. Find the match — either from selection or first live match
+  let match = window._selectedMatch;
+  if (!match && typeof D11API !== 'undefined') {
+    try {
+      const liveMatches = await D11API.getMatches('live');
+      if (liveMatches && liveMatches.length > 0) {
+        match = liveMatches[0];
+        window._selectedMatch = match;
+        window._selectedMatchId = match.id;
+      }
+    } catch(e) { console.warn('Failed to fetch live matches:', e); }
+  }
+
+  // If still upcoming but within 30 min, try to refresh from DB
+  if (match && match.status === 'upcoming' && typeof D11API !== 'undefined') {
+    try {
+      const freshMatch = await D11API.getMatch(match.id);
+      if (freshMatch) {
+        match = freshMatch;
+        window._selectedMatch = freshMatch;
+      }
+    } catch(e) {}
+  }
+
+  if (!match) {
+    document.getElementById('live-match-title').innerHTML = 'No Live Match <span style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:500;">• LIVE</span>';
+    document.getElementById('live-match-status').textContent = 'No live match available';
+    return;
+  }
+
+  // 2. Populate header
+  const codeA = getTeamCode(match.team_a);
+  const codeB = getTeamCode(match.team_b);
+  document.getElementById('live-match-title').innerHTML = codeA + ' vs ' + codeB + ' <span style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:500;">• ' + (match.status === 'live' ? 'LIVE' : match.status === 'completed' ? 'COMPLETED' : 'UPCOMING') + '</span>';
+  document.getElementById('live-match-venue').textContent = match.venue || '';
+
+  // 3. Team logos
+  const logoA = document.getElementById('live-team-a-logo');
+  const logoB = document.getElementById('live-team-b-logo');
+  logoA.textContent = codeA;
+  logoA.className = 'team-logo bg-' + codeA.toLowerCase();
+  logoA.style.width = '32px'; logoA.style.height = '32px'; logoA.style.fontSize = '10px';
+  logoB.textContent = codeB;
+  logoB.className = 'team-logo bg-' + codeB.toLowerCase();
+  logoB.style.width = '32px'; logoB.style.height = '32px'; logoB.style.fontSize = '10px';
+
+  // 4. Scores
+  document.getElementById('live-score-a').textContent = match.score_a || '—';
+  document.getElementById('live-overs-a').textContent = match.overs_a || codeA;
+  document.getElementById('live-score-b').textContent = match.score_b || '—';
+  document.getElementById('live-overs-b').textContent = match.overs_b || codeB;
+
+  // 5. Match status
+  if (match.status === 'live') {
+    document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-red);">● LIVE</span>';
+    document.getElementById('live-match-status').textContent = match.status_note || 'Match in progress';
+  } else if (match.status === 'completed') {
+    document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-grey);">● COMPLETED</span>';
+    document.getElementById('live-match-status').textContent = match.status_note || 'Match completed';
+  } else {
+    const start = new Date(match.starts_at);
+    document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-orange);">● UPCOMING</span>';
+    document.getElementById('live-match-status').textContent = 'Starts ' + start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+
+  // 6. Load live scores from DB (player-level fantasy points)
+  await loadLivePlayerScores(match.id);
+
+  // 7. Load user's team points and rank
+  await loadLiveUserStats(match.id);
+
+  // 8. Start polling for updates every 30s
+  if (_liveMatchPollInterval) clearInterval(_liveMatchPollInterval);
+  if (match.status === 'live') {
+    _liveMatchPollInterval = setInterval(async () => {
+      const liveScreen = document.getElementById('screen-live-match');
+      if (!liveScreen || liveScreen.style.display === 'none') {
+        clearInterval(_liveMatchPollInterval);
+        _liveMatchPollInterval = null;
+        return;
+      }
+      try {
+        // Refresh match data
+        const freshMatch = await D11API.getMatch(match.id);
+        if (freshMatch) {
+          window._selectedMatch = freshMatch;
+          match = freshMatch;
+          document.getElementById('live-score-a').textContent = match.score_a || '—';
+          document.getElementById('live-overs-a').textContent = match.overs_a || codeA;
+          document.getElementById('live-score-b').textContent = match.score_b || '—';
+          document.getElementById('live-overs-b').textContent = match.overs_b || codeB;
+          document.getElementById('live-match-status').textContent = match.status_note || 'Match in progress';
+          if (match.status === 'completed') {
+            document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-grey);">● COMPLETED</span>';
+            clearInterval(_liveMatchPollInterval);
+          }
+        }
+        // Refresh player scores
+        await loadLivePlayerScores(match.id);
+        await loadLiveUserStats(match.id);
+      } catch(e) { console.warn('Live poll error:', e); }
+    }, 30000);
+  }
+}
+
+async function loadLivePlayerScores(matchId) {
+  if (typeof D11API === 'undefined') return;
+  try {
+    const scores = await D11API.getLiveScores(matchId);
+    if (!scores || scores.length === 0) {
+      // No live_scores rows yet — try to build scorecard from user teams
+      renderLiveScorecard();
+      return;
+    }
+
+    // Build a friendSquads-compatible structure from live_scores + user teams
+    // First set myName from profile
+    if (!myName && typeof D11API !== 'undefined') {
+      try {
+        const user = await D11API.getUser();
+        if (user) myName = user.squadName || user.name || '';
+      } catch(e) {}
+    }
+
+    // Get my team for this match
+    const myTeam = await D11API.getMyTeam(matchId);
+
+    // Build player scores map from live_scores table
+    const playerScoresMap = {};
+    scores.forEach(s => {
+      playerScoresMap[s.player_id] = {
+        name: s.players?.name || 'Unknown',
+        team: s.players?.team || '',
+        role: s.players?.role || '',
+        pts: s.fantasy_pts || 0,
+        status: s.status || 'waiting',
+        runs: s.runs || 0,
+        wickets: s.wickets || 0,
+        catches: s.catches || 0,
+      };
+    });
+
+    // Build my squad in friendSquads if I have a team
+    if (myTeam && myName) {
+      const myPlayers = (myTeam.user_team_players || []).map(utp => {
+        const p = utp.players || {};
+        const liveData = playerScoresMap[utp.player_id] || {};
+        return {
+          name: p.name || liveData.name || 'Unknown',
+          team: p.team || liveData.team || '',
+          role: p.role || liveData.role || '',
+          pts: liveData.pts || 0,
+          status: liveData.status || 'waiting',
+          cap: utp.player_id === myTeam.captain_id ? 'C' : utp.player_id === myTeam.vice_captain_id ? 'VC' : null,
+        };
+      });
+      const totalPts = myPlayers.reduce((sum, p) => {
+        const mult = p.cap === 'C' ? 2 : p.cap === 'VC' ? 1.5 : 1;
+        return sum + p.pts * mult;
+      }, 0);
+
+      friendSquads[myName] = {
+        squad: window.userSquadName || myName,
+        pts: Math.round(totalPts * 10) / 10,
+        rank: myTeam.rank || '—',
+        players: myPlayers,
+      };
+    }
+
+    // Also add all match players to scorecard (even those not in user's team)
+    // This gives a full scorecard view
+    if (!friendSquads['All Players']) {
+      const allPlayers = scores.map(s => ({
+        name: s.players?.name || 'Unknown',
+        team: s.players?.team || '',
+        role: s.players?.role || '',
+        pts: s.fantasy_pts || 0,
+        status: s.status || 'waiting',
+      }));
+      // Don't add as a squad, just make sure scorecard renders all players
+    }
+
+    renderLiveScorecard();
+  } catch(e) {
+    console.warn('Failed to load live player scores:', e);
+    renderLiveScorecard();
+  }
+}
+
+async function loadLiveUserStats(matchId) {
+  if (typeof D11API === 'undefined') return;
+  try {
+    const myTeam = await D11API.getMyTeam(matchId);
+    if (myTeam) {
+      document.getElementById('live-your-pts').textContent = fmtPts(myTeam.total_points || 0);
+      document.getElementById('live-your-rank').textContent = 'Rank: ' + (myTeam.rank || '—');
+    } else {
+      document.getElementById('live-your-pts').textContent = '—';
+      document.getElementById('live-your-rank').textContent = 'No team created';
+    }
+  } catch(e) {
+    console.warn('Failed to load user stats:', e);
+  }
+}
 function fmtPtsStr(v) { return Number(v).toFixed(1); }
 
 // Toast notification helper
@@ -2213,7 +2410,7 @@ if (window.location.hash === '#admin') {
 function renderLiveScorecard() {
   const list = document.getElementById('live-scorecard-list');
   if (!myName || !friendSquads[myName] || !friendSquads[myName].players) {
-    list.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No live scorecard data yet. Create a team first!</div>';
+    list.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No live scorecard data yet. Scores will appear once the match begins.</div>';
     return;
   }
   const myPicks = new Set(friendSquads[myName].players.map(p => p.name));
@@ -2966,40 +3163,10 @@ window.addEventListener('load', () => {
   initApp();
 });
 
-// ====== LIVE SCORES SIMULATION ======
-let liveSimInterval = null;
-function startLiveSimulation() {
-  if (liveSimInterval) return;
-  liveSimInterval = setInterval(() => {
-    // Randomly update a player's points
-    Object.values(friendSquads).forEach(sq => {
-      sq.players.forEach(p => {
-        if (p.status === 'batting' || p.status === 'bowling') {
-          p.pts += Math.round((Math.random() * 4 - 0.5) * 10) / 10;
-          if (p.pts < 0) p.pts = 0;
-        }
-      });
-      // Recalculate total
-      sq.pts = sq.players.reduce((sum, p) => {
-        let mult = p.cap === 'C' ? 2 : p.cap === 'VC' ? 1.5 : 1;
-        return sum + p.pts * mult;
-      }, 0);
-      sq.pts = Math.round(sq.pts * 10) / 10;
-    });
-    // Re-render if on live screen
-    const liveScreen = document.getElementById('screen-live-match');
-    if (liveScreen && liveScreen.style.display !== 'none') {
-      renderLiveScorecard();
-      document.getElementById('live-your-pts').textContent = fmtPts(friendSquads[myName].pts);
-    }
-  }, 5000); // Update every 5 seconds
-}
-
-// Patch showScreen once to add live simulation trigger + dynamic friends
+// Patch showScreen to add dynamic friends loading on match detail
 const _preSimShowScreen = showScreen;
 showScreen = function(id) {
   _preSimShowScreen(id);
-  if (id === 'live-match') startLiveSimulation();
   if (id === 'match-detail' && window._selectedMatchId) {
     loadMatchFriends(window._selectedMatchId);
   }
