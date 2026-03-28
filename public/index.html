@@ -288,6 +288,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .captain-badge-circle { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--d11-grey); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; color: var(--d11-grey); }
 .captain-badge-circle.c { border-color: var(--d11-gold); color: var(--d11-gold); }
 .captain-badge-circle.vc { border-color: var(--d11-blue); color: var(--d11-blue); }
+.captain-badge-circle.ip { border-color: #27AE60; color: #27AE60; }
 .captain-badge-label { font-size: 10px; color: var(--d11-grey); font-weight: 600; }
 .captain-badge-pts { font-size: 11px; font-weight: 700; }
 
@@ -297,6 +298,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .cap-btn { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--d11-border); background: transparent; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--d11-grey); cursor: pointer; transition: all 0.2s; }
 .cap-btn.c-selected { border-color: var(--d11-gold); background: var(--d11-gold); color: var(--d11-dark); }
 .cap-btn.vc-selected { border-color: var(--d11-blue); background: var(--d11-blue); color: white; }
+.cap-btn.ip-selected { border-color: #27AE60; background: #27AE60; color: white; }
 
 /* ====== TEAM PREVIEW ====== */
 .team-preview { flex: 1; background: linear-gradient(180deg, #1B5E20 0%, #2E7D32 30%, #388E3C 60%, #1B5E20 100%); display: flex; flex-direction: column; position: relative; overflow: hidden; }
@@ -311,6 +313,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .preview-avatar .cap-badge { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 900; }
 .preview-avatar .cap-badge.c { background: var(--d11-gold); color: var(--d11-dark); }
 .preview-avatar .cap-badge.vc { background: var(--d11-blue); color: white; }
+.preview-avatar .cap-badge.ip { background: #27AE60; color: white; }
 .preview-pname { font-size: 9px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 3px; margin-top: 3px; text-align: center; max-width: 72px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preview-credits { font-size: 8px; color: rgba(255,255,255,0.6); margin-top: 1px; }
 
@@ -784,15 +787,15 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="header-left">
         <div class="back-btn" onclick="showScreen('team-select')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
-          <div class="header-title" style="font-size:15px;">Choose Captain & Vice Captain</div>
+          <div class="header-title" style="font-size:15px;">Choose C, VC & Impact Player</div>
           <div class="header-subtitle">CSK vs MI</div>
         </div>
       </div>
     </div>
 
     <div class="captain-header">
-      <div class="captain-title">Choose your Captain and Vice Captain</div>
-      <div class="captain-sub">Captain gets 2x points, Vice Captain gets 1.5x</div>
+      <div class="captain-title">Choose Captain, Vice Captain & Impact Player</div>
+      <div class="captain-sub">C gets 2x pts, VC gets 1.5x pts, IP gets +4 bonus pts</div>
       <div class="captain-badges">
         <div class="captain-badge-item">
           <div class="captain-badge-circle c" id="cap-c-badge">C</div>
@@ -803,6 +806,11 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
           <div class="captain-badge-circle vc" id="cap-vc-badge">VC</div>
           <div class="captain-badge-label">VICE CAPTAIN</div>
           <div class="captain-badge-pts">1.5x Points</div>
+        </div>
+        <div class="captain-badge-item">
+          <div class="captain-badge-circle ip" id="cap-ip-badge">IP</div>
+          <div class="captain-badge-label">IMPACT PLAYER</div>
+          <div class="captain-badge-pts">+4 Bonus</div>
         </div>
       </div>
     </div>
@@ -1452,6 +1460,7 @@ let selectedPlayers = [];
 let currentRole = 'WK';
 let captainId = null;
 let viceCaptainId = null;
+let impactPlayerId = null;
 
 // ====== NAVIGATION ======
 const screensWithNav = ['home', 'my-matches', 'leaderboard', 'wallet', 'profile'];
@@ -1741,6 +1750,7 @@ function resetTeamSelection() {
   selectedPlayers = [];
   captainId = null;
   viceCaptainId = null;
+  impactPlayerId = null;
   currentRole = 'WK';
   document.querySelectorAll('.role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === 'WK'));
 }
@@ -1893,6 +1903,7 @@ function goToCaptainSelect() {
   }
   captainId = null;
   viceCaptainId = null;
+  impactPlayerId = null;
   showScreen('captain');
   renderCaptainList();
 }
@@ -1903,6 +1914,7 @@ function renderCaptainList() {
     const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2);
     const isCap = captainId === p.id;
     const isVC = viceCaptainId === p.id;
+    const isIP = impactPlayerId === p.id;
     return `<div class="captain-player">
       <div class="captain-player-info">
         <div class="player-avatar" style="margin-right:10px;">
@@ -1917,30 +1929,41 @@ function renderCaptainList() {
       <div class="captain-actions">
         <button class="cap-btn ${isCap ? 'c-selected' : ''}" onclick="setCaptain('${p.id}')">C</button>
         <button class="cap-btn ${isVC ? 'vc-selected' : ''}" onclick="setViceCaptain('${p.id}')">VC</button>
+        <button class="cap-btn ${isIP ? 'ip-selected' : ''}" onclick="setImpactPlayer('${p.id}')">IP</button>
       </div>
     </div>`;
   }).join('');
 
   const btn = document.getElementById('save-team-btn');
-  const valid = captainId && viceCaptainId && captainId !== viceCaptainId;
+  const valid = captainId && viceCaptainId && impactPlayerId
+    && captainId !== viceCaptainId && captainId !== impactPlayerId && viceCaptainId !== impactPlayerId;
   btn.className = 'next-btn ' + (valid ? 'enabled' : 'disabled');
 }
 
 function setCaptain(id) {
   if (viceCaptainId === id) viceCaptainId = null;
+  if (impactPlayerId === id) impactPlayerId = null;
   captainId = captainId === id ? null : id;
   renderCaptainList();
 }
 
 function setViceCaptain(id) {
   if (captainId === id) captainId = null;
+  if (impactPlayerId === id) impactPlayerId = null;
   viceCaptainId = viceCaptainId === id ? null : id;
+  renderCaptainList();
+}
+
+function setImpactPlayer(id) {
+  if (captainId === id) captainId = null;
+  if (viceCaptainId === id) viceCaptainId = null;
+  impactPlayerId = impactPlayerId === id ? null : id;
   renderCaptainList();
 }
 
 // ====== TEAM PREVIEW ======
 function saveTeam() {
-  if (!captainId || !viceCaptainId) return;
+  if (!captainId || !viceCaptainId || !impactPlayerId) return;
   showScreen('preview');
   renderPreview();
 }
@@ -1964,12 +1987,14 @@ function renderPreview() {
       const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2);
       const isCap = captainId === p.id;
       const isVC = viceCaptainId === p.id;
+      const isIP = impactPlayerId === p.id;
       const shortName = p.name.length > 10 ? p.name.split(' ').pop() : p.name;
       html += `<div class="preview-player">
         <div class="preview-avatar" style="background:${TEAM_COLORS[p.team]}">
           ${initials}
           ${isCap ? '<div class="cap-badge c">C</div>' : ''}
           ${isVC ? '<div class="cap-badge vc">VC</div>' : ''}
+          ${isIP ? '<div class="cap-badge ip">IP</div>' : ''}
         </div>
         <div class="preview-pname">${shortName}</div>
         <div class="preview-credits">${p.credit} Cr</div>
@@ -2953,7 +2978,7 @@ confirmTeam = async function() {
   if (typeof D11API !== 'undefined') {
     const matchId = window._selectedMatchId || 'match-28';
     const playerIds = selectedPlayers.map(p => p.id);
-    const result = await D11API.saveTeam(matchId, playerIds, captainId, viceCaptainId);
+    const result = await D11API.saveTeam(matchId, playerIds, captainId, viceCaptainId, impactPlayerId);
     if (result.success) {
       showScreen('match-detail');
       return;
@@ -2973,6 +2998,7 @@ function doLogout() {
   selectedPlayers = [];
   captainId = null;
   viceCaptainId = null;
+  impactPlayerId = null;
   showScreen('login');
 }
 

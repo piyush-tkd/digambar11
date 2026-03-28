@@ -186,7 +186,7 @@
 
   // ====== TEAM MODULE ======
   const Team = {
-    async saveTeam(matchId, playerIds, captainId, viceCaptainId) {
+    async saveTeam(matchId, playerIds, captainId, viceCaptainId, impactPlayerId) {
       const sb = await initSupabase();
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return { success: false, errors: ['Not logged in'] };
@@ -203,6 +203,7 @@
           player_ids: playerIds,
           captain_id: captainId,
           vice_captain_id: viceCaptainId,
+          impact_player_id: impactPlayerId || null,
         }),
       });
 

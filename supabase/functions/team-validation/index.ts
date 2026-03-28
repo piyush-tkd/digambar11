@@ -24,6 +24,7 @@ interface TeamRequest {
   player_ids: string[];
   captain_id: string;
   vice_captain_id: string;
+  impact_player_id: string | null;
 }
 
 serve(async (req) => {
@@ -52,7 +53,7 @@ serve(async (req) => {
 
     // Parse request
     const body: TeamRequest = await req.json();
-    const { match_id, player_ids, captain_id, vice_captain_id } = body;
+    const { match_id, player_ids, captain_id, vice_captain_id, impact_player_id } = body;
 
     // =====================
     // VALIDATION RULES
@@ -75,6 +76,19 @@ serve(async (req) => {
     // 3. Captain ≠ Vice-captain
     if (captain_id && captain_id === vice_captain_id) {
       errors.push('Captain and Vice-captain must be different');
+    }
+
+    // 3b. Impact Player validation
+    if (impact_player_id) {
+      if (!player_ids.includes(impact_player_id)) {
+        errors.push('Impact Player must be in your team');
+      }
+      if (impact_player_id === captain_id) {
+        errors.push('Impact Player must be different from Captain');
+      }
+      if (impact_player_id === vice_captain_id) {
+        errors.push('Impact Player must be different from Vice-captain');
+      }
     }
 
     // 4. Fetch player details for remaining validations
@@ -159,6 +173,7 @@ serve(async (req) => {
         match_id,
         captain_id,
         vice_captain_id,
+        impact_player_id: impact_player_id || null,
         total_credits: totalCredits,
       }, {
         onConflict: 'user_id,match_id',
