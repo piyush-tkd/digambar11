@@ -1,12 +1,17 @@
 // ============================================================
 // Edge Function: Live Score
-// Fetches real-time scores from ESPNCricinfo's free consumer API
-// and updates ALL live IPL matches in the DB.
-// Called periodically (every 60s) — single call returns all live matches.
-// All users get instant Realtime push via Supabase subscriptions.
+// Multi-provider live score ingestion for IPL matches.
 //
-// Primary: ESPNCricinfo consumer API (free, no key, works from Deno Deploy)
-// Fallback: CricketData.org API (if configured in provider_config)
+// Provider waterfall:
+//   1. CricketData.org (paid plan) — currentMatches + match_scorecard
+//   2. Sportmonks Cricket API — /livescores with runs include
+//
+// Both API keys read from `provider_config` table:
+//   - id='cricketdata' → CricketData.org key
+//   - id='sportmonks'  → Sportmonks API token
+//
+// Called periodically (every 30-60s during live matches).
+// Updates `matches` table → Supabase Realtime pushes to all clients.
 // ============================================================
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -17,66 +22,373 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-// ESPNCricinfo consumer API (free, no auth required)
-const ESPN_BASE = 'https://hs-consumer-api.espncricinfo.com/v1/pages';
-const ESPN_IPL_SERIES_ID = '1510719'; // IPL 2026
-
-// IPL team code mapping — handles various name formats
-const TEAM_MAP: Record<string, { code: string; aliases: string[] }> = {
-  'CSK': { code: 'CSK', aliases: ['chennai super kings', 'chennai', 'csk'] },
-  'MI':  { code: 'MI',  aliases: ['mumbai indians', 'mumbai', 'mi'] },
-  'RCB': { code: 'RCB', aliases: ['royal challengers', 'royal challengers bengaluru', 'royal challengers bangalore', 'bangalore', 'bengaluru', 'rcb'] },
-  'KKR': { code: 'KKR', aliases: ['kolkata knight riders', 'kolkata', 'kkr'] },
-  'DC':  { code: 'DC',  aliases: ['delhi capitals', 'delhi', 'dc'] },
-  'SRH': { code: 'SRH', aliases: ['sunrisers hyderabad', 'hyderabad', 'srh', 'sunrisers'] },
-  'RR':  { code: 'RR',  aliases: ['rajasthan royals', 'rajasthan', 'rr'] },
-  'PBKS':{ code: 'PBKS', aliases: ['punjab kings', 'punjab', 'pbks'] },
-  'GT':  { code: 'GT',  aliases: ['gujarat titans', 'gujarat', 'gt'] },
-  'LSG': { code: 'LSG', aliases: ['lucknow super giants', 'lucknow', 'lsg'] },
+// ─── IPL Team Resolution ────────────────────────────────────
+const TEAM_ALIASES: Record<string, string[]> = {
+  CSK:  ['chennai super kings', 'chennai', 'csk', 'che'],
+  MI:   ['mumbai indians', 'mumbai', 'mi', 'mum'],
+  RCB:  ['royal challengers', 'royal challengers bengaluru', 'royal challengers bangalore', 'bangalore', 'bengaluru', 'rcb', 'ban'],
+  KKR:  ['kolkata knight riders', 'kolkata', 'kkr', 'kol'],
+  DC:   ['delhi capitals', 'delhi', 'dc', 'del'],
+  SRH:  ['sunrisers hyderabad', 'hyderabad', 'srh', 'hyd', 'sunrisers'],
+  RR:   ['rajasthan royals', 'rajasthan', 'rr', 'raj'],
+  PBKS: ['punjab kings', 'punjab', 'pbks', 'pun', 'pk'],
+  GT:   ['gujarat titans', 'gujarat', 'gt', 'guj'],
+  LSG:  ['lucknow super giants', 'lucknow', 'lsg', 'luc'],
 };
 
-function resolveTeamCode(teamName: string): string | null {
-  if (!teamName) return null;
-  const lower = teamName.toLowerCase().trim();
+function resolveTeamCode(name: string): string | null {
+  if (!name) return null;
+  const upper = name.toUpperCase().trim();
+  if (TEAM_ALIASES[upper]) return upper;
 
-  // Direct code match
-  const upper = teamName.toUpperCase().trim();
-  if (TEAM_MAP[upper]) return upper;
-
-  // Search aliases
-  for (const [code, info] of Object.entries(TEAM_MAP)) {
-    for (const alias of info.aliases) {
-      if (lower === alias || lower.includes(alias) || alias.includes(lower)) {
-        return code;
-      }
+  const lower = name.toLowerCase().trim();
+  for (const [code, aliases] of Object.entries(TEAM_ALIASES)) {
+    for (const alias of aliases) {
+      if (lower === alias || lower.includes(alias) || alias.includes(lower)) return code;
     }
   }
   return null;
 }
 
-function mapEspnStatus(matchState: string, statusText: string): string {
-  const state = (matchState || '').toUpperCase();
-  const text = (statusText || '').toLowerCase();
-
-  if (state === 'RESULT' || state === 'POST' || text.includes('won') || text.includes('tied')) return 'completed';
-  if (state === 'LIVE' || state === 'INNINGS_BREAK' || state === 'STRATEGIC_TIMEOUT' ||
-      text.includes('innings') || text.includes('break')) return 'live';
-  if (state === 'ABANDONED' || text.includes('abandon') || text.includes('no result')) return 'abandoned';
-  if (state === 'PRE' || state === 'SCHEDULED' || text.includes('yet to begin')) return 'upcoming';
-  // Default to live if we're unsure but have data
-  return 'live';
+// ─── Status Mapping ─────────────────────────────────────────
+function mapStatus(raw: string): string {
+  const s = (raw || '').toLowerCase();
+  if (s.includes('won') || s.includes('result') || s.includes('completed') || s === 'match over') return 'completed';
+  if (s.includes('live') || s.includes('break') || s.includes('innings') || s.includes('timeout') || s.includes('in progress')) return 'live';
+  if (s.includes('abandon') || s.includes('no result')) return 'abandoned';
+  if (s.includes('upcoming') || s.includes('not started') || s.includes('scheduled') || s === '') return 'upcoming';
+  return 'live'; // default for unknown active states
 }
 
-// Format score string: "185/6 (20.0)"
-function formatScore(innings: any): string {
-  if (!innings) return 'Yet to bat';
-  const runs = innings.runs ?? innings.totalRuns ?? '';
-  const wickets = innings.wickets ?? innings.totalWickets ?? '';
-  const overs = innings.overs ?? innings.oversBowled ?? '';
-  if (runs === '' && wickets === '' && overs === '') return 'Yet to bat';
-  return `${runs}/${wickets} (${overs})`;
+// ─── Provider Config ────────────────────────────────────────
+async function getProviderKey(providerId: string): Promise<{ apiKey: string; baseUrl: string } | null> {
+  const { data } = await supabase
+    .from('provider_config')
+    .select('api_key, base_url')
+    .eq('id', providerId)
+    .single();
+  if (data?.api_key) return { apiKey: data.api_key, baseUrl: data.base_url || '' };
+  return null;
 }
 
+// ─── DB Helpers ─────────────────────────────────────────────
+async function getDbLiveMatches() {
+  const { data } = await supabase
+    .from('matches')
+    .select('id, external_id, team_a, team_b, status, starts_at')
+    .in('status', ['live', 'upcoming']);
+  return data || [];
+}
+
+function findDbMatch(dbMatches: any[], codeA: string, codeB: string) {
+  return dbMatches.find(m =>
+    (m.team_a === codeA && m.team_b === codeB) ||
+    (m.team_a === codeB && m.team_b === codeA)
+  );
+}
+
+async function updateMatch(dbId: string, scoreA: string, scoreB: string, status: string, result: string | null, source: string) {
+  const { error } = await supabase
+    .from('matches')
+    .update({
+      score_a: scoreA,
+      score_b: scoreB,
+      status,
+      result,
+      status_note: result,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', dbId);
+  if (error) console.error(`DB update failed [${source}]:`, error);
+  return !error;
+}
+
+// ═══════════════════════════════════════════════════════════
+// PROVIDER 1: CricketData.org
+// API: https://api.cricapi.com/v1
+// Endpoints: currentMatches (all live), match_info, match_scorecard
+// Score format: score[].r (runs), .w (wickets), .o (overs), .inning
+// ═══════════════════════════════════════════════════════════
+async function fetchCricketData(dbMatches: any[]): Promise<{ results: any[]; error?: string }> {
+  const config = await getProviderKey('cricketdata');
+  if (!config?.apiKey) return { results: [], error: 'No CricketData API key in provider_config' };
+
+  const BASE = config.baseUrl || 'https://api.cricapi.com/v1';
+  const results: any[] = [];
+
+  try {
+    // Fetch all current matches
+    const url = `${BASE}/currentMatches?apikey=${config.apiKey}&offset=0`;
+    console.log('[CricketData] Fetching currentMatches...');
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.status === 'failure') {
+      console.error('[CricketData] API failure:', data.reason);
+      return { results: [], error: `CricketData: ${data.reason}` };
+    }
+
+    const matches = data.data || [];
+    console.log(`[CricketData] Got ${matches.length} current matches`);
+
+    // Filter for IPL
+    for (const m of matches) {
+      const series = (m.series || '').toLowerCase();
+      const isIPL = series.includes('ipl') || series.includes('indian premier league');
+
+      // Resolve teams
+      const t1 = m.teamInfo?.[0]?.shortname || m.teams?.[0] || '';
+      const t2 = m.teamInfo?.[1]?.shortname || m.teams?.[1] || '';
+      const code1 = resolveTeamCode(t1);
+      const code2 = resolveTeamCode(t2);
+
+      // Skip if not IPL and not both IPL teams
+      if (!isIPL && !(code1 && code2)) continue;
+      if (!code1 || !code2) continue;
+
+      // Find DB match
+      const dbMatch = findDbMatch(dbMatches, code1, code2);
+      if (!dbMatch) {
+        console.log(`[CricketData] No DB match for ${code1} vs ${code2}`);
+        continue;
+      }
+
+      // Parse scores from score array
+      const scoreMap: Record<string, string> = {};
+      if (Array.isArray(m.score) && m.score.length > 0) {
+        for (const s of m.score) {
+          const inningTeam = resolveTeamCode(s.inning?.split(' ')?.[0] || '');
+          if (inningTeam) {
+            scoreMap[inningTeam] = `${s.r}/${s.w} (${s.o})`;
+          }
+        }
+      }
+
+      const scoreA = scoreMap[dbMatch.team_a] || 'Yet to bat';
+      const scoreB = scoreMap[dbMatch.team_b] || 'Yet to bat';
+      const status = mapStatus(m.status || m.matchType || '');
+      const result = m.status || null;
+
+      const ok = await updateMatch(dbMatch.id, scoreA, scoreB, status, result, 'cricketdata');
+      if (ok) {
+        console.log(`[CricketData] ✓ ${dbMatch.team_a} ${scoreA} vs ${dbMatch.team_b} ${scoreB} [${status}]`);
+        results.push({
+          match_id: dbMatch.id,
+          teams: `${dbMatch.team_a} vs ${dbMatch.team_b}`,
+          score_a: scoreA,
+          score_b: scoreB,
+          status,
+          result,
+          source: 'cricketdata',
+        });
+      }
+    }
+
+    // If no IPL in currentMatches, try individual match lookups for live DB matches
+    if (results.length === 0) {
+      console.log('[CricketData] No IPL in currentMatches, trying match_info for live matches...');
+      const liveOnly = dbMatches.filter(m => m.status === 'live');
+
+      for (const dbm of liveOnly) {
+        if (!dbm.external_id) continue;
+        try {
+          const miUrl = `${BASE}/match_info?apikey=${config.apiKey}&id=${dbm.external_id}`;
+          const miRes = await fetch(miUrl);
+          const miData = await miRes.json();
+
+          if (miData.status !== 'success' || !miData.data) continue;
+          const md = miData.data;
+
+          const scoreMap: Record<string, string> = {};
+          if (Array.isArray(md.score)) {
+            for (const s of md.score) {
+              const code = resolveTeamCode(s.inning?.split(' ')?.[0] || '');
+              if (code) scoreMap[code] = `${s.r}/${s.w} (${s.o})`;
+            }
+          }
+
+          const scoreA = scoreMap[dbm.team_a] || 'Yet to bat';
+          const scoreB = scoreMap[dbm.team_b] || 'Yet to bat';
+          const status = mapStatus(md.status || '');
+          const result = md.status || null;
+
+          const ok = await updateMatch(dbm.id, scoreA, scoreB, status, result, 'cricketdata_direct');
+          if (ok) {
+            console.log(`[CricketData] ✓ direct: ${dbm.team_a} ${scoreA} vs ${dbm.team_b} ${scoreB}`);
+            results.push({
+              match_id: dbm.id,
+              teams: `${dbm.team_a} vs ${dbm.team_b}`,
+              score_a: scoreA,
+              score_b: scoreB,
+              status,
+              result,
+              source: 'cricketdata_direct',
+            });
+          }
+        } catch (e) {
+          console.warn(`[CricketData] match_info failed for ${dbm.external_id}:`, e);
+        }
+      }
+    }
+
+    return { results };
+
+  } catch (err) {
+    console.error('[CricketData] Fetch error:', err);
+    return { results: [], error: String(err) };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PROVIDER 2: Sportmonks Cricket API
+// API: https://cricket.sportmonks.com/api/v2.0
+// Endpoints: /livescores?include=runs,batting,bowling
+// Auth: ?api_token=TOKEN
+// ═══════════════════════════════════════════════════════════
+async function fetchSportmonks(dbMatches: any[]): Promise<{ results: any[]; error?: string }> {
+  const config = await getProviderKey('sportmonks');
+  if (!config?.apiKey) return { results: [], error: 'No Sportmonks API token in provider_config' };
+
+  const BASE = config.baseUrl || 'https://cricket.sportmonks.com/api/v2.0';
+  const results: any[] = [];
+
+  try {
+    // Fetch live scores with runs include
+    const url = `${BASE}/livescores?api_token=${config.apiKey}&include=runs,batting,bowling`;
+    console.log('[Sportmonks] Fetching livescores...');
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.error) {
+      console.error('[Sportmonks] API error:', data.error);
+      return { results: [], error: `Sportmonks: ${JSON.stringify(data.error)}` };
+    }
+
+    const matches = data.data || [];
+    console.log(`[Sportmonks] Got ${matches.length} live matches`);
+
+    for (const m of matches) {
+      // Extract team names from localteam/visitorteam
+      const localTeam = m.localteam?.name || m.localteam?.code || '';
+      const visitorTeam = m.visitorteam?.name || m.visitorteam?.code || '';
+      const code1 = resolveTeamCode(localTeam);
+      const code2 = resolveTeamCode(visitorTeam);
+
+      if (!code1 || !code2) continue;
+
+      const dbMatch = findDbMatch(dbMatches, code1, code2);
+      if (!dbMatch) continue;
+
+      // Parse scores from runs include
+      const scoreMap: Record<string, string> = {};
+      const runs = m.runs?.data || m.runs || [];
+
+      if (Array.isArray(runs)) {
+        for (const r of runs) {
+          // Sportmonks runs: team_id, score, wickets, overs
+          let teamCode: string | null = null;
+          if (r.team_id === m.localteam_id) teamCode = code1;
+          else if (r.team_id === m.visitorteam_id) teamCode = code2;
+
+          if (teamCode && r.score !== undefined) {
+            scoreMap[teamCode] = `${r.score}/${r.wickets} (${r.overs})`;
+          }
+        }
+      }
+
+      // Fallback: use localteam_dl_data / visitorteam_dl_data or score fields
+      if (Object.keys(scoreMap).length === 0) {
+        if (m.localteam_dl_data?.score !== undefined) {
+          scoreMap[code1] = `${m.localteam_dl_data.score}/${m.localteam_dl_data.wickets || 0}`;
+        }
+        if (m.visitorteam_dl_data?.score !== undefined) {
+          scoreMap[code2] = `${m.visitorteam_dl_data.score}/${m.visitorteam_dl_data.wickets || 0}`;
+        }
+      }
+
+      const scoreA = scoreMap[dbMatch.team_a] || 'Yet to bat';
+      const scoreB = scoreMap[dbMatch.team_b] || 'Yet to bat';
+      const status = mapStatus(m.status || '');
+      const result = m.note || m.status || null;
+
+      const ok = await updateMatch(dbMatch.id, scoreA, scoreB, status, result, 'sportmonks');
+      if (ok) {
+        console.log(`[Sportmonks] ✓ ${dbMatch.team_a} ${scoreA} vs ${dbMatch.team_b} ${scoreB} [${status}]`);
+        results.push({
+          match_id: dbMatch.id,
+          teams: `${dbMatch.team_a} vs ${dbMatch.team_b}`,
+          score_a: scoreA,
+          score_b: scoreB,
+          status,
+          result,
+          source: 'sportmonks',
+        });
+      }
+    }
+
+    // If no live scores, also try fixtures endpoint for today
+    if (results.length === 0 && matches.length === 0) {
+      console.log('[Sportmonks] No livescores, trying today fixtures...');
+      const today = new Date().toISOString().split('T')[0];
+      const fUrl = `${BASE}/fixtures?api_token=${config.apiKey}&filter[starts_between]=${today},${today}&include=runs`;
+      try {
+        const fRes = await fetch(fUrl);
+        const fData = await fRes.json();
+        const fixtures = fData.data || [];
+        console.log(`[Sportmonks] Today fixtures: ${fixtures.length}`);
+
+        for (const f of fixtures) {
+          const lt = resolveTeamCode(f.localteam?.name || '');
+          const vt = resolveTeamCode(f.visitorteam?.name || '');
+          if (!lt || !vt) continue;
+
+          const dbMatch = findDbMatch(dbMatches, lt, vt);
+          if (!dbMatch) continue;
+
+          // If fixture has live/completed status, update
+          const fStatus = mapStatus(f.status || '');
+          if (fStatus === 'upcoming') continue;
+
+          const scoreMap: Record<string, string> = {};
+          const fRuns = f.runs?.data || [];
+          for (const r of fRuns) {
+            let tc: string | null = null;
+            if (r.team_id === f.localteam_id) tc = lt;
+            else if (r.team_id === f.visitorteam_id) tc = vt;
+            if (tc && r.score !== undefined) scoreMap[tc] = `${r.score}/${r.wickets} (${r.overs})`;
+          }
+
+          const scoreA = scoreMap[dbMatch.team_a] || 'Yet to bat';
+          const scoreB = scoreMap[dbMatch.team_b] || 'Yet to bat';
+
+          await updateMatch(dbMatch.id, scoreA, scoreB, fStatus, f.note || null, 'sportmonks_fixture');
+          results.push({
+            match_id: dbMatch.id,
+            teams: `${dbMatch.team_a} vs ${dbMatch.team_b}`,
+            score_a: scoreA,
+            score_b: scoreB,
+            status: fStatus,
+            source: 'sportmonks_fixture',
+          });
+        }
+      } catch (fErr) {
+        console.warn('[Sportmonks] Fixtures fetch failed:', fErr);
+      }
+    }
+
+    return { results };
+
+  } catch (err) {
+    console.error('[Sportmonks] Fetch error:', err);
+    return { results: [], error: String(err) };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN HANDLER
+// ═══════════════════════════════════════════════════════════
 serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -90,377 +402,53 @@ serve(async (req) => {
   try {
     console.log('=== Live Score Update Started ===');
 
-    // ─────────────────────────────────────────
-    // Strategy 1: ESPNCricinfo — fetch all current matches
-    // ─────────────────────────────────────────
-    let iplMatches: any[] = [];
-    let source = 'espncricinfo';
+    // Get all live/upcoming matches from DB
+    const dbMatches = await getDbLiveMatches();
+    console.log(`DB has ${dbMatches.length} live/upcoming matches`);
 
-    try {
-      // Get all currently live matches
-      const currentUrl = `${ESPN_BASE}/matches/current?lang=en&latest=true`;
-      console.log('Fetching from ESPNCricinfo:', currentUrl);
-
-      const espnRes = await fetch(currentUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!espnRes.ok) {
-        throw new Error(`ESPN API returned ${espnRes.status}: ${espnRes.statusText}`);
-      }
-
-      const espnData = await espnRes.json();
-      console.log('ESPN response keys:', Object.keys(espnData));
-
-      // The response has different structures — handle both formats
-      // Format 1: { matches: [...] }
-      // Format 2: { content: { matches: { ... } } }
-      // Format 3: { typeMatches: [ { matchType: "...", seriesMatches: [...] } ] }
-      let allMatches: any[] = [];
-
-      if (espnData.matches && Array.isArray(espnData.matches)) {
-        allMatches = espnData.matches;
-      } else if (espnData.content?.matches) {
-        // Could be grouped by match type
-        const matchGroups = espnData.content.matches;
-        if (Array.isArray(matchGroups)) {
-          allMatches = matchGroups;
-        } else {
-          // Object with match categories
-          for (const key of Object.keys(matchGroups)) {
-            if (Array.isArray(matchGroups[key])) {
-              allMatches.push(...matchGroups[key]);
-            }
-          }
-        }
-      } else if (espnData.typeMatches && Array.isArray(espnData.typeMatches)) {
-        // Format from Cricbuzz-style grouping
-        for (const typeMatch of espnData.typeMatches) {
-          if (typeMatch.seriesMatches && Array.isArray(typeMatch.seriesMatches)) {
-            for (const seriesMatch of typeMatch.seriesMatches) {
-              if (seriesMatch.seriesAdWrapper?.matches) {
-                allMatches.push(...seriesMatch.seriesAdWrapper.matches);
-              }
-            }
-          }
-        }
-      }
-
-      // Also try flat data array
-      if (allMatches.length === 0 && Array.isArray(espnData.data)) {
-        allMatches = espnData.data;
-      }
-
-      console.log(`Total current matches from ESPN: ${allMatches.length}`);
-
-      // Filter for IPL matches
-      for (const matchWrapper of allMatches) {
-        const match = matchWrapper.match || matchWrapper.matchInfo || matchWrapper;
-
-        const seriesId = String(match.series?.id || match.seriesId || '');
-        const seriesName = (match.series?.name || match.seriesName || '').toLowerCase();
-
-        // Check if it's IPL
-        const isIPL = seriesId === ESPN_IPL_SERIES_ID ||
-                      seriesName.includes('indian premier league') ||
-                      seriesName.includes('ipl');
-
-        if (!isIPL) {
-          // Also check by team names — if both teams are IPL teams, it's probably IPL
-          const team1Name = match.teams?.[0]?.team?.name || match.team1?.teamName || '';
-          const team2Name = match.teams?.[1]?.team?.name || match.team2?.teamName || '';
-          const code1 = resolveTeamCode(team1Name);
-          const code2 = resolveTeamCode(team2Name);
-          if (!(code1 && code2)) continue;
-        }
-
-        iplMatches.push(matchWrapper);
-      }
-
-      console.log(`IPL matches from ESPN: ${iplMatches.length}`);
-
-    } catch (espnErr) {
-      console.error('ESPNCricinfo fetch failed:', espnErr);
-      source = 'espn_failed';
+    if (dbMatches.length === 0) {
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'No live/upcoming matches in DB',
+        matches_updated: 0,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ─────────────────────────────────────────
-    // If ESPN returned matches with no details, also try per-match endpoint
-    // ─────────────────────────────────────────
+    // ── Provider waterfall (respects is_primary flag) ──
+    // Sportmonks is primary, CricketData is fallback
+    let allResults: any[] = [];
+    const errors: string[] = [];
 
-    // If no matches from the current endpoint, try fetching IPL series page
-    if (iplMatches.length === 0 && source === 'espncricinfo') {
-      try {
-        const seriesUrl = `${ESPN_BASE}/series/home?lang=en&seriesId=${ESPN_IPL_SERIES_ID}`;
-        console.log('Trying ESPN series page:', seriesUrl);
+    // 1. Try Sportmonks FIRST (is_primary=true in provider_config)
+    console.log('--- Provider 1: Sportmonks (primary) ---');
+    const sm = await fetchSportmonks(dbMatches);
+    if (sm.results.length > 0) {
+      allResults.push(...sm.results);
+      console.log(`[Sportmonks] Updated ${sm.results.length} matches`);
+    }
+    if (sm.error) errors.push(sm.error);
 
-        const seriesRes = await fetch(seriesUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
-        });
+    // 2. Try CricketData for any matches Sportmonks didn't cover
+    const updatedIds = new Set(allResults.map(r => r.match_id));
+    const remainingMatches = dbMatches.filter(m => !updatedIds.has(m.id));
 
-        if (seriesRes.ok) {
-          const seriesData = await seriesRes.json();
-          const matchList = seriesData.content?.matches ||
-                           seriesData.collections?.[0]?.matches ||
-                           seriesData.matches || [];
-
-          console.log(`Series page returned ${Array.isArray(matchList) ? matchList.length : 'object'} matches`);
-
-          const flatMatches = Array.isArray(matchList) ? matchList : Object.values(matchList).flat();
-
-          // Find live ones
-          for (const mw of flatMatches) {
-            const m = mw.match || mw;
-            const state = (m.state || m.matchState || '').toUpperCase();
-            if (state === 'LIVE' || state === 'INNINGS_BREAK' || state === 'STRATEGIC_TIMEOUT') {
-              iplMatches.push(mw);
-            }
-          }
-
-          console.log(`Live IPL matches from series page: ${iplMatches.length}`);
-        }
-      } catch (seriesErr) {
-        console.error('ESPN series fetch failed:', seriesErr);
+    if (remainingMatches.length > 0 || allResults.length === 0) {
+      console.log(`--- Provider 2: CricketData (${remainingMatches.length} remaining) ---`);
+      const cd = await fetchCricketData(remainingMatches.length > 0 ? remainingMatches : dbMatches);
+      if (cd.results.length > 0) {
+        allResults.push(...cd.results);
+        console.log(`[CricketData] Updated ${cd.results.length} matches`);
       }
+      if (cd.error) errors.push(cd.error);
     }
 
-    // ─────────────────────────────────────────
-    // Also check DB for matches marked as live — fetch their ESPN match page directly
-    // This ensures we get scores even if the "current matches" endpoint misses them
-    // ─────────────────────────────────────────
-    const { data: dbLiveMatches } = await supabase
-      .from('matches')
-      .select('id, external_id, espn_id, team_a, team_b, status')
-      .in('status', ['live', 'upcoming']);
-
-    console.log(`DB has ${dbLiveMatches?.length || 0} live/upcoming matches`);
-
-    // For each DB match with an espn_id, fetch its match page directly
-    const espnMatchResults: any[] = [];
-
-    if (dbLiveMatches && dbLiveMatches.length > 0) {
-      for (const dbm of dbLiveMatches) {
-        if (!dbm.espn_id) continue;
-
-        try {
-          const matchUrl = `${ESPN_BASE}/match/home?lang=en&seriesId=${ESPN_IPL_SERIES_ID}&matchId=${dbm.espn_id}`;
-          console.log(`Fetching ESPN match ${dbm.espn_id} (${dbm.team_a} vs ${dbm.team_b})...`);
-
-          const mRes = await fetch(matchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
-          });
-
-          if (!mRes.ok) {
-            console.warn(`ESPN match ${dbm.espn_id} returned ${mRes.status}`);
-            continue;
-          }
-
-          const mData = await mRes.json();
-          const matchInfo = mData.match || mData.content?.match || mData;
-          const scorecard = mData.scorecard || mData.content?.scorecard || {};
-          const innings = scorecard.innings || mData.innings || mData.content?.innings || [];
-
-          // Get match state
-          const matchState = matchInfo.state || matchInfo.matchState || '';
-          const statusText = matchInfo.statusText || matchInfo.status || matchInfo.statusEng || '';
-          const status = mapEspnStatus(matchState, statusText);
-
-          // Skip if match hasn't started
-          if (status === 'upcoming' && innings.length === 0) {
-            console.log(`Match ${dbm.team_a} vs ${dbm.team_b} not started yet, skipping`);
-            continue;
-          }
-
-          // Parse teams from ESPN response
-          const espnTeam1 = matchInfo.teams?.[0]?.team || matchInfo.team1 || {};
-          const espnTeam2 = matchInfo.teams?.[1]?.team || matchInfo.team2 || {};
-          const espnCode1 = resolveTeamCode(espnTeam1.name || espnTeam1.teamName || '');
-          const espnCode2 = resolveTeamCode(espnTeam2.name || espnTeam2.teamName || '');
-
-          // Parse innings scores
-          let scoreMap: Record<string, string> = {};
-
-          if (Array.isArray(innings) && innings.length > 0) {
-            for (const inn of innings) {
-              const battingTeamId = String(inn.team?.id || inn.teamId || inn.batTeamId || '');
-              const battingTeamName = inn.team?.name || inn.batTeamName || '';
-              const teamCode = resolveTeamCode(battingTeamName) ||
-                              (battingTeamId === String(espnTeam1.id) ? espnCode1 : null) ||
-                              (battingTeamId === String(espnTeam2.id) ? espnCode2 : null);
-
-              if (teamCode) {
-                // Accumulate scores (in case of 2 innings in tests, take latest)
-                scoreMap[teamCode] = formatScore(inn);
-              }
-            }
-          }
-
-          // Also try parsing from match.score or match.currentInnings
-          if (Object.keys(scoreMap).length === 0) {
-            // Try alternative score formats
-            const miniScore = mData.content?.miniscore || mData.miniscore;
-            if (miniScore) {
-              const batTeam = miniScore.matchScoreDetails?.inningsScoreList || [];
-              for (const is of batTeam) {
-                const code = resolveTeamCode(is.batTeamName || '');
-                if (code) {
-                  scoreMap[code] = `${is.score}/${is.wickets} (${is.overs})`;
-                }
-              }
-            }
-          }
-
-          // Assign scores to DB team order
-          let dbScoreA = scoreMap[dbm.team_a] || 'Yet to bat';
-          let dbScoreB = scoreMap[dbm.team_b] || 'Yet to bat';
-
-          // If match is live and no scores yet, both are yet to bat
-          if (Object.keys(scoreMap).length === 0 && status !== 'upcoming') {
-            dbScoreA = 'Yet to bat';
-            dbScoreB = 'Yet to bat';
-          }
-
-          // Update DB
-          const { error: updateError } = await supabase
-            .from('matches')
-            .update({
-              score_a: dbScoreA,
-              score_b: dbScoreB,
-              status,
-              result: statusText || null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', dbm.id);
-
-          if (updateError) {
-            console.error(`Failed to update ${dbm.team_a} vs ${dbm.team_b}:`, updateError);
-          } else {
-            console.log(`✓ Updated: ${dbm.team_a} ${dbScoreA} vs ${dbm.team_b} ${dbScoreB} [${status}] — "${statusText}"`);
-          }
-
-          espnMatchResults.push({
-            match_id: dbm.id,
-            teams: `${dbm.team_a} vs ${dbm.team_b}`,
-            score_a: dbScoreA,
-            score_b: dbScoreB,
-            status,
-            result: statusText,
-            source: 'espn_direct',
-          });
-
-        } catch (matchErr) {
-          console.error(`Error fetching ESPN match ${dbm.espn_id}:`, matchErr);
-        }
-      }
-    }
-
-    // ─────────────────────────────────────────
-    // Process matches found from current matches endpoint
-    // (only if not already handled via direct fetch)
-    // ─────────────────────────────────────────
-    const handledMatchIds = new Set(espnMatchResults.map(r => r.match_id));
-    const currentMatchResults: any[] = [];
-
-    for (const matchWrapper of iplMatches) {
-      try {
-        const match = matchWrapper.match || matchWrapper.matchInfo || matchWrapper;
-        const scorecard = matchWrapper.scorecard || {};
-        const innings = scorecard.innings || matchWrapper.innings || [];
-
-        // Extract team info
-        const team1 = match.teams?.[0]?.team || match.team1 || {};
-        const team2 = match.teams?.[1]?.team || match.team2 || {};
-        const team1Name = team1.name || team1.teamName || '';
-        const team2Name = team2.name || team2.teamName || '';
-
-        const codeA = resolveTeamCode(team1Name);
-        const codeB = resolveTeamCode(team2Name);
-
-        if (!codeA || !codeB) {
-          console.warn(`Skipping match — can't resolve: "${team1Name}" vs "${team2Name}"`);
-          continue;
-        }
-
-        // Find in DB
-        const { data: dbMatches } = await supabase
-          .from('matches')
-          .select('id, external_id, espn_id, team_a, team_b')
-          .or(`and(team_a.eq.${codeA},team_b.eq.${codeB}),and(team_a.eq.${codeB},team_b.eq.${codeA})`)
-          .in('status', ['live', 'upcoming'])
-          .order('starts_at', { ascending: false })
-          .limit(1);
-
-        const dbMatch = dbMatches?.[0];
-        if (!dbMatch || handledMatchIds.has(dbMatch.id)) continue;
-
-        // Parse scores
-        const scoreMap: Record<string, string> = {};
-        if (Array.isArray(innings) && innings.length > 0) {
-          for (const inn of innings) {
-            const teamCode = resolveTeamCode(inn.team?.name || inn.batTeamName || '');
-            if (teamCode) scoreMap[teamCode] = formatScore(inn);
-          }
-        }
-
-        const matchState = match.state || match.matchState || '';
-        const statusText = match.statusText || match.status || '';
-        const status = mapEspnStatus(matchState, statusText);
-
-        let dbScoreA = scoreMap[dbMatch.team_a] || 'Yet to bat';
-        let dbScoreB = scoreMap[dbMatch.team_b] || 'Yet to bat';
-
-        const { error: updateError } = await supabase
-          .from('matches')
-          .update({
-            score_a: dbScoreA,
-            score_b: dbScoreB,
-            status,
-            result: statusText || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', dbMatch.id);
-
-        if (updateError) {
-          console.error(`Failed to update ${codeA} vs ${codeB}:`, updateError);
-        } else {
-          console.log(`✓ Updated from current: ${dbMatch.team_a} ${dbScoreA} vs ${dbMatch.team_b} ${dbScoreB} [${status}]`);
-        }
-
-        // Store ESPN match ID if we don't have it
-        const espnMatchId = String(match.id || match.objectId || '');
-        if (espnMatchId && !dbMatch.espn_id) {
-          await supabase
-            .from('matches')
-            .update({ espn_id: espnMatchId })
-            .eq('id', dbMatch.id);
-        }
-
-        currentMatchResults.push({
-          match_id: dbMatch.id,
-          teams: `${codeA} vs ${codeB}`,
-          score_a: dbScoreA,
-          score_b: dbScoreB,
-          status,
-          result: statusText,
-          source: 'espn_current',
-        });
-
-      } catch (matchErr) {
-        console.error('Error processing current match:', matchErr);
-      }
-    }
-
-    const allResults = [...espnMatchResults, ...currentMatchResults];
+    console.log(`=== Done: ${allResults.length} matches updated ===`);
 
     return new Response(JSON.stringify({
       success: true,
-      source,
       matches_updated: allResults.length,
-      ipl_matches_found: iplMatches.length,
-      db_live_matches: dbLiveMatches?.length || 0,
+      db_total: dbMatches.length,
+      errors: errors.length > 0 ? errors : undefined,
       results: allResults,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
