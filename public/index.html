@@ -505,7 +505,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 
       <div style="margin-bottom:16px;">
         <div style="font-size:11px;color:var(--d11-grey);font-weight:600;margin-bottom:6px;text-transform:uppercase;">Your Name</div>
-        <input type="text" id="setup-name" value="Piyush" style="width:100%;background:var(--d11-card);border:2px solid var(--d11-border);border-radius:10px;padding:14px;font-size:14px;color:var(--d11-white);outline:none;font-family:inherit;">
+        <input type="text" id="setup-name" value="" placeholder="Your name" style="width:100%;background:var(--d11-card);border:2px solid var(--d11-border);border-radius:10px;padding:14px;font-size:14px;color:var(--d11-white);outline:none;font-family:inherit;">
       </div>
 
       <div style="margin-bottom:8px;">
@@ -749,7 +749,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div class="back-btn" onclick="showScreen('team-select')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
           <div class="header-title" style="font-size:15px;">Choose C, VC & Impact Player</div>
-          <div class="header-subtitle">CSK vs MI</div>
+          <div class="header-subtitle" id="captain-match-sub">Select Match</div>
         </div>
       </div>
     </div>
@@ -790,7 +790,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div class="back-btn" onclick="showScreen('captain')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
           <div class="header-title" style="font-size:15px;">Team Preview</div>
-          <div class="header-subtitle">CSK vs MI</div>
+          <div class="header-subtitle" id="preview-match-sub">—</div>
         </div>
       </div>
     </div>
@@ -823,13 +823,13 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 
     <!-- Match Tab -->
     <div id="lb-match-tab" style="flex:1; overflow-y:auto; display:flex; flex-direction:column;">
-      <div class="leaderboard-header">
-        <div class="lb-match-info">
-          <div class="lb-team-mini"><div class="lb-team-logo bg-rcb">RCB</div> 185/4</div>
+      <div class="leaderboard-header" id="lb-match-header">
+        <div class="lb-match-info" id="lb-match-info">
+          <div class="lb-team-mini" id="lb-team-a">—</div>
           <span style="color:var(--d11-grey)">vs</span>
-          <div class="lb-team-mini"><div class="lb-team-logo bg-kkr">KKR</div> 142/6*</div>
+          <div class="lb-team-mini" id="lb-team-b">—</div>
         </div>
-        <div class="lb-score" style="text-align:center">KKR need 44 runs from 28 balls</div>
+        <div class="lb-score" style="text-align:center" id="lb-match-status">No match selected</div>
       </div>
       <div style="display:flex;justify-content:space-between;padding:8px 16px;font-size:10px;color:var(--d11-grey);font-weight:600;text-transform:uppercase;border-bottom:1px solid var(--d11-border);">
         <span style="width:30px;text-align:center;">#</span>
@@ -866,8 +866,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="header-left">
         <div class="back-btn" onclick="showScreen('home')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
-          <div class="header-title" style="font-size:15px;">RCB vs KKR <span style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:500;">• LIVE</span></div>
-          <div class="header-subtitle">Chinnaswamy Stadium, Bangalore</div>
+          <div class="header-title" style="font-size:15px;" id="live-match-title">— vs — <span style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:500;">• LIVE</span></div>
+          <div class="header-subtitle" id="live-match-venue">—</div>
         </div>
       </div>
     </div>
@@ -876,26 +876,26 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     <div style="background:var(--d11-dark);padding:12px 16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div class="team-logo bg-rcb" style="width:32px;height:32px;font-size:10px;">RCB</div>
-          <div><div style="font-size:15px;font-weight:800;">185/4</div><div style="font-size:10px;color:var(--d11-grey);">20 ov</div></div>
+          <div class="team-logo" style="width:32px;height:32px;font-size:10px;" id="live-team-a-logo">—</div>
+          <div><div style="font-size:15px;font-weight:800;" id="live-score-a">—</div><div style="font-size:10px;color:var(--d11-grey);" id="live-overs-a">—</div></div>
         </div>
         <div style="text-align:center;">
-          <div style="font-size:10px;color:var(--d11-red);font-weight:700;">● LIVE</div>
-          <div style="font-size:9px;color:var(--d11-grey);">2nd Innings</div>
+          <div style="font-size:10px;color:var(--d11-red);font-weight:700;" id="live-status-dot">● LIVE</div>
+          <div style="font-size:9px;color:var(--d11-grey);" id="live-innings-label">—</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <div><div style="font-size:15px;font-weight:800;text-align:right;">142/6</div><div style="font-size:10px;color:var(--d11-grey);text-align:right;">16.4 ov</div></div>
-          <div class="team-logo bg-kkr" style="width:32px;height:32px;font-size:10px;">KKR</div>
+          <div><div style="font-size:15px;font-weight:800;text-align:right;" id="live-score-b">—</div><div style="font-size:10px;color:var(--d11-grey);text-align:right;" id="live-overs-b">—</div></div>
+          <div class="team-logo" style="width:32px;height:32px;font-size:10px;" id="live-team-b-logo">—</div>
         </div>
       </div>
-      <div style="text-align:center;font-size:11px;color:var(--d11-orange);font-weight:600;margin-top:6px;">KKR need 44 runs from 20 balls</div>
+      <div style="text-align:center;font-size:11px;color:var(--d11-orange);font-weight:600;margin-top:6px;" id="live-match-status">Waiting for live data...</div>
     </div>
 
     <!-- Your Points Bar -->
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(39,174,96,0.08);border-bottom:1px solid var(--d11-border);">
       <div style="font-size:12px;font-weight:600;">Your Points</div>
-      <div style="font-size:20px;font-weight:900;color:var(--d11-green);" id="live-your-pts">324.5</div>
-      <div style="font-size:11px;color:var(--d11-grey);">Rank: <span style="color:var(--d11-gold);font-weight:800;">#2</span> of 6</div>
+      <div style="font-size:20px;font-weight:900;color:var(--d11-green);" id="live-your-pts">0</div>
+      <div style="font-size:11px;color:var(--d11-grey);" id="live-your-rank">Rank: —</div>
     </div>
 
     <!-- Live Tabs -->
@@ -1150,7 +1150,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div style="margin-bottom:16px;">
         <div style="font-size:11px;color:var(--d11-grey);font-weight:600;margin-bottom:6px;">SQUAD NAME <span style="color:var(--d11-orange);font-size:9px;">(permanent)</span></div>
         <div id="edit-squad-name" style="background:var(--d11-card);border-radius:8px;padding:12px 14px;font-size:14px;display:flex;justify-content:space-between;align-items:center;">
-          <span>Digambar XI</span>
+          <span>—</span>
           <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:var(--d11-grey);"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2z"/></svg>
         </div>
       </div>
@@ -1158,7 +1158,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div style="font-size:11px;color:var(--d11-grey);font-weight:600;margin-bottom:6px;">GMAIL</div>
         <div style="background:var(--d11-card);border-radius:8px;padding:12px 14px;font-size:14px;display:flex;align-items:center;gap:8px;">
           <svg width="16" height="16" viewBox="0 0 48 48" style="flex-shrink:0;"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
-          <span>bahetipiyush@gmail.com</span>
+          <span id="edit-email">—</span>
         </div>
       </div>
       <button onclick="alert('Profile saved!'); showScreen('profile');" style="width:100%;padding:14px;border-radius:10px;border:none;background:var(--d11-green);color:white;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;">Save Changes</button>
@@ -1784,6 +1784,15 @@ function goToCaptainSelect() {
   captainId = null;
   viceCaptainId = null;
   impactPlayerId = null;
+  // Update captain & preview subtitles with current match
+  const match = window._selectedMatch;
+  if (match) {
+    const matchLabel = getTeamCode(match.team_a) + ' vs ' + getTeamCode(match.team_b);
+    const capSub = document.getElementById('captain-match-sub');
+    const prevSub = document.getElementById('preview-match-sub');
+    if (capSub) capSub.textContent = matchLabel;
+    if (prevSub) prevSub.textContent = matchLabel;
+  }
   showScreen('captain');
   renderCaptainList();
 }
@@ -2788,6 +2797,10 @@ async function loadUserProfile() {
     if (editAvatar) editAvatar.textContent = initial;
     if (editName) editName.textContent = displayName;
     if (editUsername) editUsername.textContent = user.email || '—';
+
+    // Edit email
+    const editEmail = document.getElementById('edit-email');
+    if (editEmail) editEmail.textContent = user.email || '—';
 
     // Edit squad name
     const editSquad = document.getElementById('edit-squad-name');
