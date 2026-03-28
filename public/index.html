@@ -314,7 +314,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .preview-avatar .cap-badge.c { background: var(--d11-gold); color: var(--d11-dark); }
 .preview-avatar .cap-badge.vc { background: var(--d11-blue); color: white; }
 .preview-avatar .cap-badge.ip { background: #27AE60; color: white; }
-.preview-pname { font-size: 8px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 3px; margin-top: 3px; text-align: center; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-pname { font-size: 9px; font-weight: 700; color: #fff; background: rgba(0,0,0,0.75); padding: 3px 8px; border-radius: 4px; margin-top: 4px; text-align: center; max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 .preview-credits { font-size: 8px; color: rgba(255,255,255,0.6); margin-top: 1px; }
 
 /* ====== LEADERBOARD ====== */
@@ -964,7 +964,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     </div>
 
     <div class="wallet-balance">
-      <div class="wallet-amount">₹<span>175</span></div>
+      <div class="wallet-amount">₹<span id="wallet-balance-main">0</span></div>
       <div class="wallet-label">Net Winnings (Season)</div>
     </div>
 
@@ -2212,6 +2212,10 @@ if (window.location.hash === '#admin') {
 
 function renderLiveScorecard() {
   const list = document.getElementById('live-scorecard-list');
+  if (!myName || !friendSquads[myName] || !friendSquads[myName].players) {
+    list.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No live scorecard data yet. Create a team first!</div>';
+    return;
+  }
   const myPicks = new Set(friendSquads[myName].players.map(p => p.name));
   const myCaps = {};
   friendSquads[myName].players.forEach(p => { if (p.cap) myCaps[p.name] = p.cap; });
@@ -2817,9 +2821,15 @@ async function loadUserProfile() {
     const profileMatches = document.getElementById('profile-matches');
     if (profileMatches) profileMatches.textContent = matchCount;
 
-    // Wallet balance badge
+    // Wallet balance (from DB)
+    let walletBal = 0;
+    if (typeof D11API !== 'undefined' && D11API.getBalance) {
+      try { walletBal = await D11API.getBalance(); } catch(e) {}
+    }
     const walletBadge = document.getElementById('wallet-balance-badge');
-    if (walletBadge) walletBadge.textContent = '₹0';
+    if (walletBadge) walletBadge.textContent = '₹' + walletBal;
+    const walletMain = document.getElementById('wallet-balance-main');
+    if (walletMain) walletMain.textContent = walletBal;
 
     // League matches count
     const leagueCount = document.getElementById('league-matches-count');

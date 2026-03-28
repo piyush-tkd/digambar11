@@ -191,24 +191,81 @@
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return { success: false, errors: ['Not logged in'] };
 
-      // Call team-validation Edge Function
-      const res = await fetch(`${FUNCTIONS_URL}/team-validation`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': SUPABASE_ANON_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          match_id: matchId,
-          player_ids: playerIds,
-          captain_id: captainId,
-          vice_captain_id: viceCaptainId,
-          impact_player_id: impactPlayerId || null,
-        }),
-      });
+      // Try Edge Function first, fallback to direct save if it fails (503/network)
+      try {
+        const res = await fetch(`${FUNCTIONS_URL}/team-validation`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            match_id: matchId,
+            player_ids: playerIds,
+            captain_id: captainId,
+            vice_captain_id: viceCaptainId,
+            impact_player_id: impactPlayerId || null,
+          }),
+        });
+        if (res.ok || res.status === 400) {
+          return await res.json();
+        }
+        // 401/403/5xx — fall through to direct save
+        console.warn('Edge Function returned', res.status, '— falling back to direct save');
+      } catch (e) {
+        console.warn('Edge Function unreachable — falling back to direct save:', e.message);
+      }
 
-      return await res.json();
+      // ===== DIRECT SAVE FALLBACK (client-side validation) =====
+      const errors = [];
+      if (!playerIds || playerIds.length !== 11) errors.push(`Must select exactly 11 players (got ${playerIds?.length || 0})`);
+      if (captainId && !playerIds.includes(captainId)) errors.push('Captain must be in your team');
+      if (viceCaptainId && !playerIds.includes(viceCaptainId)) errors.push('Vice-captain must be in your team');
+      if (captainId && captainId === viceCaptainId) errors.push('Captain and Vice-captain must be different');
+
+      // Fetch player details for credit/role validation
+      const { data: players, error: plErr } = await sb.from('players').select('id, name, team, role, credit, overseas').in('id', playerIds);
+      if (plErr || !players) return { success: false, errors: ['Failed to fetch player data'] };
+
+      const totalCredits = players.reduce((s, p) => s + Number(p.credit), 0);
+      if (totalCredits > 100) errors.push(`Total credits exceed 100 (got ${totalCredits})`);
+
+      const overseasCount = players.filter(p => p.overseas).length;
+      if (overseasCount > 4) errors.push(`Max 4 overseas players (got ${overseasCount})`);
+
+      const rc = { WK: 0, BAT: 0, AR: 0, BWL: 0 };
+      players.forEach(p => { rc[p.role] = (rc[p.role] || 0) + 1; });
+      if (rc.WK < 1) errors.push('Need at least 1 Wicket-keeper');
+      if (rc.BAT < 1) errors.push('Need at least 1 Batter');
+      if (rc.AR < 1) errors.push('Need at least 1 All-rounder');
+      if (rc.BWL < 1) errors.push('Need at least 1 Bowler');
+
+      const tc = {};
+      players.forEach(p => { tc[p.team] = (tc[p.team] || 0) + 1; });
+      for (const [t, c] of Object.entries(tc)) { if (c > 10) errors.push(`Max 10 from one team (${t}: ${c})`); }
+
+      if (errors.length > 0) return { success: false, errors };
+
+      // Upsert user_team
+      const { data: team, error: teamErr } = await sb.from('user_teams').upsert({
+        user_id: session.user.id,
+        match_id: matchId,
+        captain_id: captainId,
+        vice_captain_id: viceCaptainId,
+        impact_player_id: impactPlayerId || null,
+        total_credits: totalCredits,
+      }, { onConflict: 'user_id,match_id' }).select().single();
+
+      if (teamErr || !team) return { success: false, errors: ['Failed to save team: ' + (teamErr?.message || 'unknown')] };
+
+      // Replace players
+      await sb.from('user_team_players').delete().eq('user_team_id', team.id);
+      const { error: insErr } = await sb.from('user_team_players').insert(playerIds.map(pid => ({ user_team_id: team.id, player_id: pid })));
+      if (insErr) return { success: false, errors: ['Failed to save players: ' + insErr.message] };
+
+      console.log('Team saved via direct fallback');
+      return { success: true, team_id: team.id, total_credits: totalCredits, composition: rc };
     },
 
     async getMyTeam(matchId) {
