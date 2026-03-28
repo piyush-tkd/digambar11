@@ -621,12 +621,12 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
             </div>
             <div class="contest-details">
               <div class="contest-detail-item"><span class="label">Entry</span><span class="value">₹25</span></div>
-              <div class="contest-detail-item"><span class="label">Friends</span><span class="value">4 joined</span></div>
+              <div class="contest-detail-item"><span class="label">Friends</span><span class="value" id="friends-joined-count">0 joined</span></div>
               <div class="contest-detail-item"><span class="label">Min.</span><span class="value">2</span></div>
               <div class="contest-detail-item"><span class="label">Winners</span><span class="value">up to 5</span></div>
             </div>
-            <div class="contest-progress"><div class="contest-progress-bar" style="width: 100%"></div></div>
-            <div class="contest-spots"><span style="color:var(--d11-green);">✓ Ready — 4 friends joined</span><span>Pro-rata prizes</span></div>
+            <div class="contest-progress"><div class="contest-progress-bar" id="friends-progress-bar" style="width: 0%"></div></div>
+            <div class="contest-spots"><span id="friends-status" style="color:var(--d11-grey);">Waiting for friends to join</span><span>Pro-rata prizes</span></div>
           </div>
         </div>
       </div>
@@ -639,47 +639,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
           <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:var(--d11-blue);flex-shrink:0;"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
           <span style="font-size:11px;color:var(--d11-blue);font-weight:600;">Squads are hidden until match starts</span>
         </div>
-        <div style="display:flex; flex-direction:column; gap:1px;">
-          <div style="display:flex; align-items:center; padding:10px 12px; background:var(--d11-card); border-radius:10px 10px 0 0;">
-            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--d11-red),var(--d11-orange));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;margin-right:10px;">P</div>
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">Piyush <span style="font-size:10px;background:var(--d11-red);padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;">YOU</span></div>
-              <div style="font-size:10px;color:var(--d11-grey);">Digambar XI</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--d11-green);font-weight:600;">
-              <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:var(--d11-green);"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Ready
-            </div>
-          </div>
-          <div style="display:flex; align-items:center; padding:10px 12px; background:var(--d11-card);">
-            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--d11-blue),#6C2BD9);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;margin-right:10px;">R</div>
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">Rahul K</div>
-              <div style="font-size:10px;color:var(--d11-grey);">Warriors XI</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--d11-green);font-weight:600;">
-              <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:var(--d11-green);"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Ready
-            </div>
-          </div>
-          <div style="display:flex; align-items:center; padding:10px 12px; background:var(--d11-card);">
-            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--d11-gold),var(--d11-orange));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;margin-right:10px;">A</div>
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">Amit S</div>
-              <div style="font-size:10px;color:var(--d11-grey);">Thunder XI</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--d11-green);font-weight:600;">
-              <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:var(--d11-green);"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Ready
-            </div>
-          </div>
-          <div style="display:flex; align-items:center; padding:10px 12px; background:var(--d11-card); border-radius: 0 0 10px 10px;">
-            <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--d11-green),#1ABC9C);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;margin-right:10px;">S</div>
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:600;">Sneha P</div>
-              <div style="font-size:10px;color:var(--d11-grey);">Phoenix XI</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--d11-orange);font-weight:600;">
-              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:var(--d11-orange);"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Picking...
-            </div>
-          </div>
+        <div id="friends-list" style="display:flex; flex-direction:column; gap:1px;">
+          <!-- Friends list populated dynamically from DB -->
         </div>
       </div>
 
@@ -1279,30 +1240,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       </div>
     </div>
     <div style="flex:1; overflow-y:auto; padding:16px;">
-      <div style="display:flex; align-items:center; padding:12px; background:var(--d11-card); border-radius:10px; margin-bottom:8px;">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--d11-blue),#6C2BD9);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;margin-right:12px;">R</div>
-        <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Rahul K</div><div style="font-size:11px;color:var(--d11-grey);">@rahul_k • 8W 4L</div></div>
-        <div style="font-size:12px;color:var(--d11-green);font-weight:700;">+₹175</div>
-      </div>
-      <div style="display:flex; align-items:center; padding:12px; background:var(--d11-card); border-radius:10px; margin-bottom:8px;">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--d11-gold),var(--d11-orange));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;margin-right:12px;">A</div>
-        <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Amit S</div><div style="font-size:11px;color:var(--d11-grey);">@amit_s • 6W 6L</div></div>
-        <div style="font-size:12px;color:var(--d11-green);font-weight:700;">+₹25</div>
-      </div>
-      <div style="display:flex; align-items:center; padding:12px; background:var(--d11-card); border-radius:10px; margin-bottom:8px;">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--d11-green),#1ABC9C);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;margin-right:12px;">S</div>
-        <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Sneha P</div><div style="font-size:11px;color:var(--d11-grey);">@sneha_p • 5W 7L</div></div>
-        <div style="font-size:12px;color:var(--d11-red);font-weight:700;">-₹50</div>
-      </div>
-      <div style="display:flex; align-items:center; padding:12px; background:var(--d11-card); border-radius:10px; margin-bottom:8px;">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#9B59B6,var(--d11-red));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;margin-right:12px;">V</div>
-        <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Vikram J</div><div style="font-size:11px;color:var(--d11-grey);">@vikram_j • 5W 7L</div></div>
-        <div style="font-size:12px;color:var(--d11-red);font-weight:700;">-₹100</div>
-      </div>
-      <div style="display:flex; align-items:center; padding:12px; background:var(--d11-card); border-radius:10px; margin-bottom:16px;">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--d11-orange),var(--d11-red));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;margin-right:12px;">P</div>
-        <div style="flex:1;"><div style="font-size:14px;font-weight:700;">Priya M</div><div style="font-size:11px;color:var(--d11-grey);">@priya_m • 4W 8L</div></div>
-        <div style="font-size:12px;color:var(--d11-red);font-weight:700;">-₹150</div>
+      <div style="text-align:center;padding:24px 16px;color:var(--d11-grey);font-size:13px;">
+        No friends yet. Invite friends to compete!
       </div>
       <button style="width:100%;padding:12px;border-radius:10px;border:2px dashed var(--d11-grey);background:transparent;color:var(--d11-light);font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
         <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:var(--d11-light)"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
@@ -1612,21 +1551,27 @@ async function loadMatchDetail() {
   logoB.className = 'banner-team-logo bg-' + codeB.toLowerCase();
   document.getElementById('md-name-b').textContent = shortB;
 
-  // Update countdown
-  const diff = start - new Date();
+  // Update countdown (live-updating every second)
   const countdownEl = document.getElementById('countdown');
   const labelEl = document.getElementById('md-countdown-label');
-  if (diff > 0) {
-    labelEl.textContent = 'Match starts in';
-    const d = Math.floor(diff / 86400000);
-    const h = Math.floor((diff % 86400000) / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    const s = Math.floor((diff % 60000) / 1000);
-    countdownEl.textContent = (d > 0 ? d + 'd ' : '') + h + 'h ' + m + 'm ' + s + 's';
-  } else {
-    labelEl.textContent = match._effectiveStatus === 'live' ? 'Match in progress' : 'Match ended';
-    countdownEl.textContent = match.result || '';
+  if (window._countdownInterval) clearInterval(window._countdownInterval);
+  function updateCountdown() {
+    const diff = start - new Date();
+    if (diff > 0) {
+      labelEl.textContent = 'Match starts in';
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      countdownEl.textContent = (d > 0 ? d + 'd ' : '') + h + 'h ' + m + 'm ' + s + 's';
+    } else {
+      labelEl.textContent = match._effectiveStatus === 'live' ? 'Match in progress' : 'Match ended';
+      countdownEl.textContent = match.result || '';
+      clearInterval(window._countdownInterval);
+    }
   }
+  updateCountdown();
+  window._countdownInterval = setInterval(updateCountdown, 1000);
 
   // Preload players for team selection
   if (typeof D11API !== 'undefined') {
@@ -2024,12 +1969,7 @@ function renderLeaderboard() {
   const list = document.getElementById('leaderboard-list');
   // Match leaderboard with pro-rata winnings (6 players × ₹25 = ₹150 pool, max 5 winners)
   const data = [
-    { rank: 1, name: 'Rahul K', team: 'Warriors XI', pts: 412.5, won: 45, isYou: false },
-    { rank: 2, name: 'Piyush', team: 'Digambar XI', pts: 324.5, won: 37.5, isYou: true },
-    { rank: 3, name: 'Amit S', team: 'Thunder XI', pts: 298.0, won: 30, isYou: false },
-    { rank: 4, name: 'Sneha P', team: 'Phoenix XI', pts: 276.5, won: 22.5, isYou: false },
-    { rank: 5, name: 'Vikram J', team: 'Storm XI', pts: 245.0, won: 15, isYou: false },
-    { rank: 6, name: 'Priya M', team: 'Blaze XI', pts: 234.5, won: 0, isYou: false },
+    { rank: 1, name: 'Piyush', team: 'Digambar XI', pts: 0, won: 0, isYou: true },
   ];
   list.innerHTML = data.map(d => {
     const rankClass = d.rank === 1 ? 'gold' : d.rank === 2 ? 'silver' : d.rank === 3 ? 'bronze' : '';
@@ -2049,65 +1989,13 @@ function renderLeaderboard() {
   // League standings with expandable match history
   const leagueList = document.getElementById('league-standings-list');
 
-  // Match history per player
+  // Match history per player (populated from DB when friends join)
   const matchHistory = {
-    'Rahul K': [
-      { match: 'CSK vs MI', date: 'Mar 15', rank: 1, pts: 412, won: 45 },
-      { match: 'RCB vs DC', date: 'Mar 14', rank: 2, pts: 298, won: 30 },
-      { match: 'KKR vs SRH', date: 'Mar 13', rank: 1, pts: 387, won: 50 },
-      { match: 'MI vs PBKS', date: 'Mar 12', rank: 3, pts: 265, won: 20 },
-      { match: 'CSK vs RR', date: 'Mar 11', rank: 1, pts: 401, won: 45 },
-      { match: 'RCB vs GT', date: 'Mar 10', rank: 4, pts: 224, won: 0 },
-    ],
-    'Piyush': [
-      { match: 'CSK vs MI', date: 'Mar 15', rank: 2, pts: 324, won: 37.5 },
-      { match: 'RCB vs DC', date: 'Mar 14', rank: 1, pts: 356, won: 45 },
-      { match: 'KKR vs SRH', date: 'Mar 13', rank: 3, pts: 278, won: 25 },
-      { match: 'MI vs PBKS', date: 'Mar 12', rank: 2, pts: 312, won: 30 },
-      { match: 'CSK vs RR', date: 'Mar 11', rank: 4, pts: 245, won: 0 },
-      { match: 'RCB vs GT', date: 'Mar 10', rank: 1, pts: 398, won: 50 },
-    ],
-    'Amit S': [
-      { match: 'CSK vs MI', date: 'Mar 15', rank: 3, pts: 298, won: 30 },
-      { match: 'RCB vs DC', date: 'Mar 14', rank: 4, pts: 234, won: 0 },
-      { match: 'KKR vs SRH', date: 'Mar 13', rank: 2, pts: 345, won: 30 },
-      { match: 'MI vs PBKS', date: 'Mar 12', rank: 1, pts: 378, won: 45 },
-      { match: 'CSK vs RR', date: 'Mar 11', rank: 5, pts: 198, won: 0 },
-      { match: 'RCB vs GT', date: 'Mar 10', rank: 2, pts: 312, won: 30 },
-    ],
-    'Sneha P': [
-      { match: 'CSK vs MI', date: 'Mar 15', rank: 4, pts: 276, won: 22.5 },
-      { match: 'RCB vs DC', date: 'Mar 14', rank: 3, pts: 312, won: 25 },
-      { match: 'KKR vs SRH', date: 'Mar 13', rank: 5, pts: 212, won: 0 },
-      { match: 'MI vs PBKS', date: 'Mar 12', rank: 4, pts: 245, won: 0 },
-      { match: 'CSK vs RR', date: 'Mar 11', rank: 2, pts: 356, won: 35 },
-      { match: 'RCB vs GT', date: 'Mar 10', rank: 5, pts: 198, won: 0 },
-    ],
-    'Vikram J': [
-      { match: 'CSK vs MI', date: 'Mar 15', rank: 5, pts: 245, won: 15 },
-      { match: 'RCB vs DC', date: 'Mar 14', rank: 5, pts: 198, won: 0 },
-      { match: 'KKR vs SRH', date: 'Mar 13', rank: 4, pts: 256, won: 15 },
-      { match: 'MI vs PBKS', date: 'Mar 12', rank: 5, pts: 198, won: 0 },
-      { match: 'CSK vs RR', date: 'Mar 11', rank: 3, pts: 312, won: 25 },
-      { match: 'RCB vs GT', date: 'Mar 10', rank: 3, pts: 278, won: 20 },
-    ],
-    'Priya M': [
-      { match: 'CSK vs MI', date: 'Mar 15', rank: 6, pts: 234, won: 0 },
-      { match: 'RCB vs DC', date: 'Mar 14', rank: 6, pts: 178, won: 0 },
-      { match: 'KKR vs SRH', date: 'Mar 13', rank: 6, pts: 189, won: 0 },
-      { match: 'MI vs PBKS', date: 'Mar 12', rank: 6, pts: 156, won: 0 },
-      { match: 'CSK vs RR', date: 'Mar 11', rank: 6, pts: 167, won: 0 },
-      { match: 'RCB vs GT', date: 'Mar 10', rank: 6, pts: 145, won: 0 },
-    ],
+    'Piyush': [],
   };
 
   const leagueData = [
-    { rank: 1, name: 'Rahul K', squad: 'Warriors XI', wins: 8, losses: 4, avgPts: 342, net: 175 },
-    { rank: 2, name: 'Piyush', squad: 'Digambar XI', wins: 7, losses: 5, avgPts: 318, net: 100, isYou: true },
-    { rank: 3, name: 'Amit S', squad: 'Thunder XI', wins: 6, losses: 6, avgPts: 295, net: 25 },
-    { rank: 4, name: 'Sneha P', squad: 'Phoenix XI', wins: 5, losses: 7, avgPts: 278, net: -50 },
-    { rank: 5, name: 'Vikram J', squad: 'Storm XI', wins: 5, losses: 7, avgPts: 265, net: -100 },
-    { rank: 6, name: 'Priya M', squad: 'Blaze XI', wins: 4, losses: 8, avgPts: 248, net: -150 },
+    { rank: 1, name: 'Piyush', squad: 'Digambar XI', wins: 0, losses: 0, avgPts: 0, net: 0, isYou: true },
   ];
 
   leagueList.innerHTML = leagueData.map(d => {
@@ -2177,58 +2065,11 @@ const friendSquads = {
       { name: 'M Siraj', team: 'RCB', role: 'BWL', pts: 5.5, status: 'bowling' },
     ]
   },
-  'Rahul K': {
-    squad: 'Warriors XI', pts: 412.5, rank: 1,
-    players: [
-      { name: 'V Kohli', team: 'RCB', role: 'BAT', pts: 62, status: 'out', cap: 'C' },
-      { name: 'G Maxwell', team: 'RCB', role: 'AR', pts: 38, status: 'out', cap: 'VC' },
-      { name: 'D Karthik', team: 'RCB', role: 'WK', pts: 28, status: 'out' },
-      { name: 'R Patidar', team: 'RCB', role: 'BAT', pts: 32, status: 'out' },
-      { name: 'W Hasaranga', team: 'RCB', role: 'BWL', pts: 35, status: 'bowling' },
-      { name: 'A Russell', team: 'KKR', role: 'AR', pts: 45, status: 'batting' },
-      { name: 'S Narine', team: 'KKR', role: 'AR', pts: 15, status: 'out' },
-      { name: 'N Rana', team: 'KKR', role: 'BAT', pts: 22, status: 'batting' },
-      { name: 'Varun CV', team: 'KKR', role: 'BWL', pts: 42, status: 'waiting' },
-      { name: 'U Yadav', team: 'KKR', role: 'BWL', pts: 48, status: 'waiting' },
-      { name: 'M Siraj', team: 'RCB', role: 'BWL', pts: 5.5, status: 'bowling' },
-    ]
-  },
-  'Amit S': {
-    squad: 'Thunder XI', pts: 298, rank: 3,
-    players: [
-      { name: 'V Kohli', team: 'RCB', role: 'BAT', pts: 62, status: 'out' },
-      { name: 'F du Plessis', team: 'RCB', role: 'BAT', pts: 44, status: 'out', cap: 'C' },
-      { name: 'D Karthik', team: 'RCB', role: 'WK', pts: 28, status: 'out' },
-      { name: 'Harshal P', team: 'RCB', role: 'BWL', pts: 18, status: 'waiting' },
-      { name: 'W Hasaranga', team: 'RCB', role: 'BWL', pts: 35, status: 'bowling' },
-      { name: 'A Russell', team: 'KKR', role: 'AR', pts: 45, status: 'batting', cap: 'VC' },
-      { name: 'S Iyer', team: 'KKR', role: 'BAT', pts: 18, status: 'out' },
-      { name: 'S Narine', team: 'KKR', role: 'AR', pts: 15, status: 'out' },
-      { name: 'N Rana', team: 'KKR', role: 'BAT', pts: 22, status: 'batting' },
-      { name: 'U Yadav', team: 'KKR', role: 'BWL', pts: 48, status: 'waiting' },
-      { name: 'M Siraj', team: 'RCB', role: 'BWL', pts: 5.5, status: 'bowling' },
-    ]
-  },
-  'Sneha P': {
-    squad: 'Phoenix XI', pts: 276.5, rank: 4,
-    players: [
-      { name: 'V Kohli', team: 'RCB', role: 'BAT', pts: 62, status: 'out', cap: 'VC' },
-      { name: 'F du Plessis', team: 'RCB', role: 'BAT', pts: 44, status: 'out' },
-      { name: 'G Maxwell', team: 'RCB', role: 'AR', pts: 38, status: 'out' },
-      { name: 'D Karthik', team: 'RCB', role: 'WK', pts: 28, status: 'out' },
-      { name: 'M Siraj', team: 'RCB', role: 'BWL', pts: 5.5, status: 'bowling' },
-      { name: 'A Russell', team: 'KKR', role: 'AR', pts: 45, status: 'batting', cap: 'C' },
-      { name: 'S Iyer', team: 'KKR', role: 'BAT', pts: 18, status: 'out' },
-      { name: 'S Narine', team: 'KKR', role: 'AR', pts: 15, status: 'out' },
-      { name: 'V Iyer', team: 'KKR', role: 'BWL', pts: 12, status: 'waiting' },
-      { name: 'Varun CV', team: 'KKR', role: 'BWL', pts: 42, status: 'waiting' },
-      { name: 'Harshal P', team: 'RCB', role: 'BWL', pts: 18, status: 'waiting' },
-    ]
-  }
+  // Other friend squads will be populated from DB when friends join contests
 };
 
 const myName = 'Piyush';
-let compareWith = 'Rahul K';
+let compareWith = null;
 
 function switchLiveTab(tab) {
   const tabs = document.querySelectorAll('#live-match-tabs .live-tab');
@@ -2630,6 +2471,85 @@ function updateCountdown() {
 }
 
 // ====== MATCH DETAIL TABS ======
+// ====== DYNAMIC FRIENDS LIST ======
+async function loadMatchFriends(matchId) {
+  const countEl = document.getElementById('friends-joined-count');
+  const statusEl = document.getElementById('friends-status');
+  const progressEl = document.getElementById('friends-progress-bar');
+  const listEl = document.getElementById('friends-list');
+  if (!countEl || !listEl) return;
+
+  // Try to load from DB
+  if (typeof D11API !== 'undefined') {
+    try {
+      const sb = await D11API.init();
+      if (!sb) throw new Error('No supabase');
+      const { data: teams } = await sb
+        .from('user_teams')
+        .select('id, user_id, captain_id, vice_captain_id, impact_player_id, profiles:user_id(display_name, squad_name)')
+        .eq('match_id', matchId);
+
+      const count = teams ? teams.length : 0;
+      countEl.textContent = count + ' joined';
+      progressEl.style.width = Math.min(count * 20, 100) + '%';
+
+      if (count >= 2) {
+        statusEl.style.color = 'var(--d11-green)';
+        statusEl.textContent = '✓ Ready — ' + count + ' friend' + (count > 1 ? 's' : '') + ' joined';
+      } else {
+        statusEl.style.color = 'var(--d11-grey)';
+        statusEl.textContent = 'Need ' + (2 - count) + ' more to start';
+      }
+
+      // Render friends list
+      const currentUser = await D11API.getUser();
+      const currentUserId = currentUser?.id;
+      const colors = ['var(--d11-red),var(--d11-orange)', 'var(--d11-blue),#6C2BD9', 'var(--d11-gold),var(--d11-orange)', 'var(--d11-green),#1ABC9C', '#9B59B6,var(--d11-red)'];
+
+      listEl.innerHTML = (teams || []).map((t, i) => {
+        const name = t.profiles?.display_name || 'Player';
+        const squad = t.profiles?.squad_name || 'My Team';
+        const isYou = t.user_id === currentUserId;
+        const initial = name.charAt(0).toUpperCase();
+        const color = colors[i % colors.length];
+        const radius = (teams.length === 1) ? '10px' : (i === 0 ? '10px 10px 0 0' : i === teams.length - 1 ? '0 0 10px 10px' : '0');
+        return `<div style="display:flex; align-items:center; padding:10px 12px; background:var(--d11-card); border-radius:${radius};">
+          <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,${color});display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;margin-right:10px;">${initial}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">${name}${isYou ? ' <span style="font-size:10px;background:var(--d11-red);padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;">YOU</span>' : ''}</div>
+            <div style="font-size:10px;color:var(--d11-grey);">${squad}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--d11-green);font-weight:600;">
+            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:var(--d11-green);"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Ready
+          </div>
+        </div>`;
+      }).join('');
+
+      if (count === 0) {
+        listEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--d11-grey);font-size:13px;">No teams created yet. Be the first!</div>';
+      }
+      return;
+    } catch(e) {
+      console.log('Friends load fallback:', e);
+    }
+  }
+
+  // Fallback: show just current user
+  const name = window.userName || 'You';
+  const squad = window.userSquadName || 'My Team';
+  countEl.textContent = '1 joined';
+  statusEl.style.color = 'var(--d11-grey)';
+  statusEl.textContent = 'Need 1 more to start';
+  progressEl.style.width = '20%';
+  listEl.innerHTML = `<div style="display:flex; align-items:center; padding:10px 12px; background:var(--d11-card); border-radius:10px;">
+    <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--d11-red),var(--d11-orange));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;margin-right:10px;">${name.charAt(0).toUpperCase()}</div>
+    <div style="flex:1;">
+      <div style="font-size:13px;font-weight:600;">${name} <span style="font-size:10px;background:var(--d11-red);padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;">YOU</span></div>
+      <div style="font-size:10px;color:var(--d11-grey);">${squad}</div>
+    </div>
+  </div>`;
+}
+
 function switchMatchTab(idx) {
   const tabs = document.querySelectorAll('#match-tabs .contest-tab');
   tabs.forEach((t, i) => t.classList.toggle('active', i === idx));
@@ -2648,7 +2568,6 @@ function switchMMTab(el) {
 
 // Simulate taken squad names
 const takenSquadNames = new Set([
-  'warriors xi', 'thunder xi', 'storm xi', 'phoenix xi', 'blaze xi',
   'royal strikers', 'super kings', 'knight riders'
 ]);
 
@@ -3038,11 +2957,14 @@ function startLiveSimulation() {
   }, 5000); // Update every 5 seconds
 }
 
-// Patch showScreen once to add live simulation trigger
+// Patch showScreen once to add live simulation trigger + dynamic friends
 const _preSimShowScreen = showScreen;
 showScreen = function(id) {
   _preSimShowScreen(id);
   if (id === 'live-match') startLiveSimulation();
+  if (id === 'match-detail' && window._selectedMatchId) {
+    loadMatchFriends(window._selectedMatchId);
+  }
 };
 </script>
 <script src="./supabase-client.js"></script>
