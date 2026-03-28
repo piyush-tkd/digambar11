@@ -314,7 +314,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .preview-avatar .cap-badge.c { background: var(--d11-gold); color: var(--d11-dark); }
 .preview-avatar .cap-badge.vc { background: var(--d11-blue); color: white; }
 .preview-avatar .cap-badge.ip { background: #27AE60; color: white; }
-.preview-pname { font-size: 9px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 3px; margin-top: 3px; text-align: center; max-width: 72px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview-pname { font-size: 8px; font-weight: 700; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 3px; margin-top: 3px; text-align: center; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .preview-credits { font-size: 8px; color: rgba(255,255,255,0.6); margin-top: 1px; }
 
 /* ====== LEADERBOARD ====== */
@@ -1988,7 +1988,7 @@ function renderPreview() {
       const isCap = captainId === p.id;
       const isVC = viceCaptainId === p.id;
       const isIP = impactPlayerId === p.id;
-      const shortName = p.name.length > 10 ? p.name.split(' ').pop() : p.name;
+      const fullName = p.name;
       html += `<div class="preview-player">
         <div class="preview-avatar" style="background:${TEAM_COLORS[p.team]}">
           ${initials}
@@ -1996,7 +1996,7 @@ function renderPreview() {
           ${isVC ? '<div class="cap-badge vc">VC</div>' : ''}
           ${isIP ? '<div class="cap-badge ip">IP</div>' : ''}
         </div>
-        <div class="preview-pname">${shortName}</div>
+        <div class="preview-pname">${fullName}</div>
         <div class="preview-credits">${p.credit} Cr</div>
       </div>`;
     });
