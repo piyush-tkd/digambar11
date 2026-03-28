@@ -541,7 +541,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="brand-actions">
         <div class="wallet-badge" onclick="showScreen('wallet')">
           <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-          +₹175
+          <span id="wallet-balance-badge">₹0</span>
         </div>
         <div class="header-icon" onclick="showScreen('profile')">
           <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
@@ -846,7 +846,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     <div id="lb-league-tab" style="flex:1; overflow-y:auto; display:none; flex-direction:column;">
       <div style="padding:14px 16px; background:var(--d11-dark); text-align:center;">
         <div style="font-size:14px; font-weight:700;">IPL 2026 Season Standings</div>
-        <div style="font-size:11px; color:var(--d11-grey); margin-top:2px;">12 matches played</div>
+        <div style="font-size:11px; color:var(--d11-grey); margin-top:2px;" id="league-matches-count">0 matches played</div>
       </div>
       <div style="display:flex;justify-content:space-between;padding:8px 16px;font-size:10px;color:var(--d11-grey);font-weight:600;text-transform:uppercase;border-bottom:1px solid var(--d11-border);">
         <span style="width:30px;text-align:center;">#</span>
@@ -949,45 +949,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="mm-tab" onclick="switchMMTab(this)">Completed</div>
     </div>
 
-    <div style="flex:1; overflow-y:auto; padding-bottom:20px;">
-      <div class="my-team-card fade-in">
-        <div class="my-team-header">
-          <div>
-            <div class="my-team-label">CSK vs MI</div>
-            <div style="font-size:11px; color:var(--d11-grey);">Tomorrow, 7:30 PM</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:11px; color:var(--d11-orange); font-weight:600;">1 Team</div>
-            <div style="font-size:11px; color:var(--d11-grey);">1 Contest</div>
-          </div>
-        </div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <div class="my-team-pip cap">MS</div>
-          <div class="my-team-pip">RJ</div>
-          <div class="my-team-pip">RA</div>
-          <div class="my-team-pip">VK</div>
-          <div class="my-team-pip">SK</div>
-          <div class="my-team-pip">JB</div>
-          <div class="my-team-pip">HI</div>
-          <div class="my-team-pip">TA</div>
-          <div class="my-team-pip">DJ</div>
-          <div class="my-team-pip">MP</div>
-          <div class="my-team-pip">RS</div>
-        </div>
-      </div>
-
-      <div class="my-team-card fade-in" onclick="showScreen('live-match')" style="cursor:pointer;">
-        <div class="my-team-header">
-          <div>
-            <div class="my-team-label">RCB vs KKR</div>
-            <div style="font-size:11px; color:var(--d11-red); font-weight:600;">● LIVE</div>
-          </div>
-          <div style="text-align:right">
-            <div class="my-team-pts">324.5 pts</div>
-            <div style="font-size:11px; color:var(--d11-grey);">Rank: #2</div>
-          </div>
-        </div>
-      </div>
+    <div style="flex:1; overflow-y:auto; padding-bottom:20px;" id="my-matches-list">
+      <div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No teams created yet. Join a contest to get started!</div>
     </div>
   </div>
 
@@ -1052,37 +1015,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     </div>
 
     <div style="padding:0 16px;"><div class="section-label">Recent Transactions</div></div>
-    <div style="flex:1; overflow-y:auto;">
-      <div class="wallet-txn">
-        <div class="wallet-txn-icon credit">💰</div>
-        <div class="wallet-txn-info"><div class="wallet-txn-title">Won 1st - SRH vs GT (6 players)</div><div class="wallet-txn-date">Mar 20, 2026</div></div>
-        <div class="wallet-txn-amount pos">+₹45</div>
-      </div>
-      <div class="wallet-txn">
-        <div class="wallet-txn-icon debit">🏏</div>
-        <div class="wallet-txn-info"><div class="wallet-txn-title">Entry - RCB vs KKR</div><div class="wallet-txn-date">Mar 21, 2026</div></div>
-        <div class="wallet-txn-amount neg">-₹25</div>
-      </div>
-      <div class="wallet-txn">
-        <div class="wallet-txn-icon debit">🏏</div>
-        <div class="wallet-txn-info"><div class="wallet-txn-title">Entry - SRH vs GT</div><div class="wallet-txn-date">Mar 20, 2026</div></div>
-        <div class="wallet-txn-amount neg">-₹25</div>
-      </div>
-      <div class="wallet-txn">
-        <div class="wallet-txn-icon credit">💰</div>
-        <div class="wallet-txn-info"><div class="wallet-txn-title">Won 2nd - CSK vs DC (4 players)</div><div class="wallet-txn-date">Mar 18, 2026</div></div>
-        <div class="wallet-txn-amount pos">+₹25</div>
-      </div>
-      <div class="wallet-txn">
-        <div class="wallet-txn-icon debit">🏏</div>
-        <div class="wallet-txn-info"><div class="wallet-txn-title">Entry - CSK vs DC</div><div class="wallet-txn-date">Mar 18, 2026</div></div>
-        <div class="wallet-txn-amount neg">-₹25</div>
-      </div>
-      <div class="wallet-txn">
-        <div class="wallet-txn-icon credit">💰</div>
-        <div class="wallet-txn-info"><div class="wallet-txn-title">Won 3rd - MI vs PBKS (5 players)</div><div class="wallet-txn-date">Mar 17, 2026</div></div>
-        <div class="wallet-txn-amount pos">+₹25</div>
-      </div>
+    <div style="flex:1; overflow-y:auto;" id="wallet-transactions">
+      <div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No transactions yet. Join a contest to get started!</div>
     </div>
   </div>
 
@@ -1096,16 +1030,16 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     </div>
 
     <div class="profile-header">
-      <div class="profile-avatar">P</div>
-      <div class="profile-name">Piyush</div>
-      <div class="profile-handle">@piyush_d11</div>
+      <div class="profile-avatar" id="profile-avatar">?</div>
+      <div class="profile-name" id="profile-name">—</div>
+      <div class="profile-handle" id="profile-handle">—</div>
     </div>
 
     <div class="profile-stats">
-      <div class="profile-stat"><div class="val">12</div><div class="lbl">Matches</div></div>
-      <div class="profile-stat"><div class="val">7</div><div class="lbl">Top 3</div></div>
-      <div class="profile-stat"><div class="val" style="color:var(--d11-green)">+₹175</div><div class="lbl">Net Won</div></div>
-      <div class="profile-stat"><div class="val">58%</div><div class="lbl">Win Rate</div></div>
+      <div class="profile-stat"><div class="val" id="profile-matches">0</div><div class="lbl">Matches</div></div>
+      <div class="profile-stat"><div class="val" id="profile-top3">0</div><div class="lbl">Top 3</div></div>
+      <div class="profile-stat"><div class="val" style="color:var(--d11-green)" id="profile-net-won">₹0</div><div class="lbl">Net Won</div></div>
+      <div class="profile-stat"><div class="val" id="profile-win-rate">0%</div><div class="lbl">Win Rate</div></div>
     </div>
 
     <div>
@@ -1202,16 +1136,16 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     </div>
     <div style="flex:1; overflow-y:auto; padding:24px 16px;">
       <div style="text-align:center; margin-bottom:24px;">
-        <div class="profile-avatar" style="margin:0 auto 8px;">P</div>
+        <div class="profile-avatar" style="margin:0 auto 8px;" id="edit-profile-avatar">?</div>
         <div style="font-size:13px;color:var(--d11-blue);font-weight:600;cursor:pointer;">Change Photo</div>
       </div>
       <div style="margin-bottom:16px;">
         <div style="font-size:11px;color:var(--d11-grey);font-weight:600;margin-bottom:6px;">DISPLAY NAME</div>
-        <div style="background:var(--d11-card);border-radius:8px;padding:12px 14px;font-size:14px;">Piyush</div>
+        <div id="edit-display-name" style="background:var(--d11-card);border-radius:8px;padding:12px 14px;font-size:14px;">—</div>
       </div>
       <div style="margin-bottom:16px;">
         <div style="font-size:11px;color:var(--d11-grey);font-weight:600;margin-bottom:6px;">USERNAME</div>
-        <div style="background:var(--d11-card);border-radius:8px;padding:12px 14px;font-size:14px;">@piyush_d11</div>
+        <div id="edit-username" style="background:var(--d11-card);border-radius:8px;padding:12px 14px;font-size:14px;">—</div>
       </div>
       <div style="margin-bottom:16px;">
         <div style="font-size:11px;color:var(--d11-grey);font-weight:600;margin-bottom:6px;">SQUAD NAME <span style="color:var(--d11-orange);font-size:9px;">(permanent)</span></div>
@@ -1681,6 +1615,7 @@ function showScreen(id) {
   if (id === 'match-detail') loadMatchDetail();
   if (id === 'team-select') { resetTeamSelection(); renderPlayers(); }
   if (id === 'live-match') renderLiveScorecard();
+  if (id === 'my-matches') loadMyMatches();
   if (id === 'admin') loadAdminPanel();
   if (id === 'profile') {
     const adminItem = document.getElementById('admin-menu-item');
@@ -1965,38 +1900,35 @@ function switchLBTab(tab) {
   document.getElementById('lb-league-tab').style.display = tab === 'league' ? 'flex' : 'none';
 }
 
-function renderLeaderboard() {
+function renderLeaderboard(data) {
   const list = document.getElementById('leaderboard-list');
-  // Match leaderboard with pro-rata winnings (6 players × ₹25 = ₹150 pool, max 5 winners)
-  const data = [
-    { rank: 1, name: 'Piyush', team: 'Digambar XI', pts: 0, won: 0, isYou: true },
-  ];
-  list.innerHTML = data.map(d => {
-    const rankClass = d.rank === 1 ? 'gold' : d.rank === 2 ? 'silver' : d.rank === 3 ? 'bronze' : '';
-    const wonColor = d.won > 0 ? 'var(--d11-green)' : 'var(--d11-grey)';
-    const wonText = d.won > 0 ? `+₹${d.won}` : '₹0';
-    return `<div class="lb-row ${d.isYou ? 'lb-you' : ''}">
-      <div class="lb-rank ${rankClass}">${d.rank}</div>
-      <div class="lb-user">
-        <div class="lb-username">${d.name}${d.isYou ? '<span class="lb-you-label">YOU</span>' : ''}</div>
-        <div class="lb-team-name">${d.team}</div>
-      </div>
-      <div style="width:55px;text-align:center;font-size:14px;font-weight:800;">${fmtPts(d.pts)}</div>
-      <div style="width:55px;text-align:right;font-size:13px;font-weight:700;color:${wonColor}">${wonText}</div>
-    </div>`;
-  }).join('');
+  // If no data passed, show empty state
+  if (!data || data.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No contest results yet. Play a match to see rankings!</div>';
+  } else {
+    list.innerHTML = data.map(d => {
+      const rankClass = d.rank === 1 ? 'gold' : d.rank === 2 ? 'silver' : d.rank === 3 ? 'bronze' : '';
+      const wonColor = d.won > 0 ? 'var(--d11-green)' : 'var(--d11-grey)';
+      const wonText = d.won > 0 ? `+₹${d.won}` : '₹0';
+      return `<div class="lb-row ${d.isYou ? 'lb-you' : ''}">
+        <div class="lb-rank ${rankClass}">${d.rank}</div>
+        <div class="lb-user">
+          <div class="lb-username">${d.name}${d.isYou ? '<span class="lb-you-label">YOU</span>' : ''}</div>
+          <div class="lb-team-name">${d.team}</div>
+        </div>
+        <div style="width:55px;text-align:center;font-size:14px;font-weight:800;">${fmtPts(d.pts)}</div>
+        <div style="width:55px;text-align:right;font-size:13px;font-weight:700;color:${wonColor}">${wonText}</div>
+      </div>`;
+    }).join('');
+  }
 
   // League standings with expandable match history
   const leagueList = document.getElementById('league-standings-list');
 
   // Match history per player (populated from DB when friends join)
-  const matchHistory = {
-    'Piyush': [],
-  };
+  const matchHistory = {};
 
-  const leagueData = [
-    { rank: 1, name: 'Piyush', squad: 'Digambar XI', wins: 0, losses: 0, avgPts: 0, net: 0, isYou: true },
-  ];
+  const leagueData = [];
 
   leagueList.innerHTML = leagueData.map(d => {
     const rankClass = d.rank === 1 ? 'gold' : d.rank === 2 ? 'silver' : d.rank === 3 ? 'bronze' : '';
@@ -2035,6 +1967,10 @@ function renderLeaderboard() {
       </div>
     </div>`;
   }).join('');
+
+  if (leagueData.length === 0) {
+    leagueList.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No season data yet. Complete a match to see standings!</div>';
+  }
 }
 
 function toggleMatchHistory(id) {
@@ -2048,27 +1984,10 @@ function toggleMatchHistory(id) {
 
 // ====== LIVE MATCH ======
 // All friends' squads (visible once match starts)
-const friendSquads = {
-  'Piyush': {
-    squad: 'Digambar XI', pts: 324.5, rank: 2,
-    players: [
-      { name: 'V Kohli', team: 'RCB', role: 'BAT', pts: 62, status: 'out', cap: 'C' },
-      { name: 'F du Plessis', team: 'RCB', role: 'BAT', pts: 44, status: 'out' },
-      { name: 'G Maxwell', team: 'RCB', role: 'AR', pts: 38, status: 'out' },
-      { name: 'D Karthik', team: 'RCB', role: 'WK', pts: 28, status: 'out' },
-      { name: 'W Hasaranga', team: 'RCB', role: 'BWL', pts: 35, status: 'bowling' },
-      { name: 'A Russell', team: 'KKR', role: 'AR', pts: 45, status: 'batting', cap: 'VC' },
-      { name: 'S Iyer', team: 'KKR', role: 'BAT', pts: 18, status: 'out' },
-      { name: 'N Rana', team: 'KKR', role: 'BAT', pts: 22, status: 'batting' },
-      { name: 'S Narine', team: 'KKR', role: 'AR', pts: 15, status: 'out' },
-      { name: 'V Iyer', team: 'KKR', role: 'BWL', pts: 12, status: 'waiting' },
-      { name: 'M Siraj', team: 'RCB', role: 'BWL', pts: 5.5, status: 'bowling' },
-    ]
-  },
-  // Other friend squads will be populated from DB when friends join contests
-};
+// friendSquads populated dynamically from DB when live match starts
+const friendSquads = {};
 
-const myName = 'Piyush';
+let myName = ''; // Set dynamically from user profile
 let compareWith = null;
 
 function switchLiveTab(tab) {
@@ -2454,21 +2373,7 @@ function renderCompare() {
   `;
 }
 
-// ====== COUNTDOWN ======
-function updateCountdown() {
-  const el = document.getElementById('countdown');
-  if (!el) return;
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(19, 30, 0, 0);
-  const diff = tomorrow - now;
-  if (diff <= 0) { el.textContent = 'LIVE'; return; }
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  el.textContent = `${h}h ${m}m ${s}s`;
-}
+// ====== COUNTDOWN (handled dynamically per-match in showMatchDetail) ======
 
 // ====== MATCH DETAIL TABS ======
 // ====== DYNAMIC FRIENDS LIST ======
@@ -2557,7 +2462,57 @@ function switchMatchTab(idx) {
   if (idx === 2) showScreen('live-match');
 }
 
-// ====== MY MATCHES TABS ======
+// ====== MY MATCHES ======
+async function loadMyMatches() {
+  const listEl = document.getElementById('my-matches-list');
+  if (!listEl || typeof D11API === 'undefined') return;
+  try {
+    const sb = await D11API.init();
+    if (!sb) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    // Get user's teams with match info
+    const { data: teams } = await sb
+      .from('user_teams')
+      .select('id, match_id, captain_id, vice_captain_id, impact_player_id, total_credits, matches:match_id(team_a, team_b, starts_at, status, result)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (!teams || teams.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No teams created yet. Join a contest to get started!</div>';
+      return;
+    }
+
+    listEl.innerHTML = teams.map(t => {
+      const match = t.matches;
+      if (!match) return '';
+      const codeA = getTeamCode(match.team_a);
+      const codeB = getTeamCode(match.team_b);
+      const start = new Date(match.starts_at);
+      const now = new Date();
+      const isLive = match.status === 'live' || match.status === '1st Innings' || match.status === '2nd Innings';
+      const isCompleted = match.status === 'completed' || match.status === 'Finished';
+      const timeStr = isLive ? '● LIVE' : isCompleted ? (match.result || 'Completed') : start.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const timeColor = isLive ? 'var(--d11-red)' : isCompleted ? 'var(--d11-green)' : 'var(--d11-grey)';
+      return `<div class="my-team-card fade-in" style="cursor:pointer;" onclick="selectMatch('${t.match_id}', '${isLive ? 'live-match' : 'match-detail'}')">
+        <div class="my-team-header">
+          <div>
+            <div class="my-team-label">${codeA} vs ${codeB}</div>
+            <div style="font-size:11px; color:${timeColor}; font-weight:600;">${timeStr}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px; color:var(--d11-orange); font-weight:600;">1 Team</div>
+            <div style="font-size:11px; color:var(--d11-grey);">${t.total_credits} credits used</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('loadMyMatches error:', err);
+  }
+}
+
 function switchMMTab(el) {
   document.querySelectorAll('#mm-tabs .mm-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -2763,8 +2718,6 @@ initTheme();
 
 // ====== INIT ======
 renderLeaderboard();
-updateCountdown();
-setInterval(updateCountdown, 1000);
 
 // ====== PWA SERVICE WORKER ======
 if ('serviceWorker' in navigator) {
@@ -2802,6 +2755,67 @@ showScreen = function(id) {
 };
 
 // ====== API INTEGRATION (uses D11API when available) ======
+// Load user profile data and populate all dynamic UI elements
+async function loadUserProfile() {
+  if (typeof D11API === 'undefined') return;
+  try {
+    const sb = await D11API.init();
+    if (!sb) return;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    // Get profile from DB
+    const { data: profile } = await sb.from('profiles').select('display_name, squad_name').eq('id', user.id).single();
+    const displayName = profile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Player';
+    const squadName = profile?.squad_name || 'My XI';
+    const initial = displayName.charAt(0).toUpperCase();
+
+    // Set myName for live match
+    myName = displayName;
+
+    // Profile page
+    const profileAvatar = document.getElementById('profile-avatar');
+    const profileName = document.getElementById('profile-name');
+    const profileHandle = document.getElementById('profile-handle');
+    if (profileAvatar) profileAvatar.textContent = initial;
+    if (profileName) profileName.textContent = displayName;
+    if (profileHandle) profileHandle.textContent = squadName;
+
+    // Edit profile page
+    const editAvatar = document.getElementById('edit-profile-avatar');
+    const editName = document.getElementById('edit-display-name');
+    const editUsername = document.getElementById('edit-username');
+    if (editAvatar) editAvatar.textContent = initial;
+    if (editName) editName.textContent = displayName;
+    if (editUsername) editUsername.textContent = user.email || '—';
+
+    // Edit squad name
+    const editSquad = document.getElementById('edit-squad-name');
+    if (editSquad) {
+      const span = editSquad.querySelector('span');
+      if (span) span.textContent = squadName;
+    }
+
+    // Get match stats from user_teams
+    const { data: teams } = await sb.from('user_teams').select('id').eq('user_id', user.id);
+    const matchCount = teams ? teams.length : 0;
+
+    // Update profile stats (real data — no hardcoding)
+    const profileMatches = document.getElementById('profile-matches');
+    if (profileMatches) profileMatches.textContent = matchCount;
+
+    // Wallet balance badge
+    const walletBadge = document.getElementById('wallet-balance-badge');
+    if (walletBadge) walletBadge.textContent = '₹0';
+
+    // League matches count
+    const leagueCount = document.getElementById('league-matches-count');
+    if (leagueCount) leagueCount.textContent = matchCount + ' matches played';
+  } catch (err) {
+    console.error('loadUserProfile error:', err);
+  }
+}
+
 async function initApp() {
   if (typeof D11API === 'undefined') {
     // No API available, just show login after splash
@@ -2832,6 +2846,7 @@ async function initApp() {
         window.userName = user.name;
         window.userSquadName = user.squadName;
         updateSquadNameUI();
+        loadUserProfile();
         showScreen('home');
       } else {
         // New user (just signed up via OAuth) — go to squad setup
