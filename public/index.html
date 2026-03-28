@@ -759,10 +759,10 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     </div>
 
     <div class="role-tabs" id="role-tabs">
-      <div class="role-tab active" data-role="WK" onclick="filterRole('WK')">WK<span class="count">(Min 1)</span></div>
-      <div class="role-tab" data-role="BAT" onclick="filterRole('BAT')">BAT<span class="count">(Min 3)</span></div>
-      <div class="role-tab" data-role="AR" onclick="filterRole('AR')">AR<span class="count">(Min 1)</span></div>
-      <div class="role-tab" data-role="BWL" onclick="filterRole('BWL')">BWL<span class="count">(Min 3)</span></div>
+      <div class="role-tab active" data-role="WK" onclick="filterRole('WK')">WK<span class="count">(1-8)</span></div>
+      <div class="role-tab" data-role="BAT" onclick="filterRole('BAT')">BAT<span class="count">(1-8)</span></div>
+      <div class="role-tab" data-role="AR" onclick="filterRole('AR')">AR<span class="count">(1-8)</span></div>
+      <div class="role-tab" data-role="BWL" onclick="filterRole('BWL')">BWL<span class="count">(1-8)</span></div>
     </div>
 
     <div class="sort-bar">
@@ -1208,7 +1208,17 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="section-label">Other</div>
       <div style="background:var(--d11-card);border-radius:10px;padding:2px 0;margin-bottom:14px;">
         <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Playing in starting XI</span><span style="font-size:12px;font-weight:700;color:var(--d11-green);">+4 pts</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Impact Player (substitute)</span><span style="font-size:12px;font-weight:700;color:var(--d11-green);">+4 pts + performance</span></div>
         <div style="display:flex;justify-content:space-between;padding:10px 14px;"><span style="font-size:12px;">Not in playing XI</span><span style="font-size:12px;font-weight:700;color:var(--d11-red);">0 pts (all)</span></div>
+      </div>
+
+      <div class="section-label">Team Composition</div>
+      <div style="background:var(--d11-card);border-radius:10px;padding:2px 0;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Total players</span><span style="font-size:12px;font-weight:700;">11</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Credits budget</span><span style="font-size:12px;font-weight:700;">100</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Each role (WK/BAT/AR/BWL)</span><span style="font-size:12px;font-weight:700;">Min 1, Max 8</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Max from one team</span><span style="font-size:12px;font-weight:700;">10</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;"><span style="font-size:12px;">Overseas players</span><span style="font-size:12px;font-weight:700;">Max 4</span></div>
       </div>
     </div>
   </div>
@@ -1770,8 +1780,10 @@ function renderPlayers() {
     const isSelected = selectedPlayers.some(sp => sp.id === p.id);
     const cantAfford = !isSelected && p.credit > creditsRemaining;
     const overseasFull = !isSelected && p.overseas && overseasCount >= 4;
+    const teamMaxed = !isSelected && (teamCounts[p.team] || 0) >= 10;
+    const roleMaxed = !isSelected && (roleCounts[p.role] || 0) >= 8;
     const teamFull = totalSelected >= 11 && !isSelected;
-    const disabled = cantAfford || overseasFull || teamFull;
+    const disabled = cantAfford || overseasFull || teamMaxed || roleMaxed || teamFull;
     const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2);
     return `<div class="player-card ${isSelected ? 'selected' : ''} ${disabled ? 'disabled' : ''}" onclick="togglePlayer('${p.id}')">
       <div class="player-avatar">
@@ -1812,8 +1824,7 @@ function renderPlayers() {
     const key = r.toUpperCase();
     const el = document.getElementById('cc-' + r);
     el.querySelector('.num').textContent = roleCounts[key];
-    const mins = { WK: 1, BAT: 3, AR: 1, BWL: 3 };
-    el.classList.toggle('fulfilled', roleCounts[key] >= mins[key]);
+    el.classList.toggle('fulfilled', roleCounts[key] >= 1 && roleCounts[key] <= 8);
   });
 
   // Composition bar
@@ -1826,7 +1837,7 @@ function renderPlayers() {
   // Next button
   const btn = document.getElementById('next-btn');
   const roleCounts2 = roleCounts;
-  const valid = totalSelected === 11 && roleCounts2.WK >= 1 && roleCounts2.BAT >= 3 && roleCounts2.AR >= 1 && roleCounts2.BWL >= 3;
+  const valid = totalSelected === 11 && roleCounts2.WK >= 1 && roleCounts2.WK <= 8 && roleCounts2.BAT >= 1 && roleCounts2.BAT <= 8 && roleCounts2.AR >= 1 && roleCounts2.AR <= 8 && roleCounts2.BWL >= 1 && roleCounts2.BWL <= 8;
   btn.className = 'next-btn ' + (valid ? 'enabled' : 'disabled');
   if (valid) {
     btn.textContent = 'NEXT → Choose Captain';
@@ -1834,9 +1845,13 @@ function renderPlayers() {
     // 11 selected but role minimums not met
     const missing = [];
     if (roleCounts2.WK < 1) missing.push('WK');
-    if (roleCounts2.BAT < 3) missing.push('BAT');
+    if (roleCounts2.BAT < 1) missing.push('BAT');
     if (roleCounts2.AR < 1) missing.push('AR');
-    if (roleCounts2.BWL < 3) missing.push('BWL');
+    if (roleCounts2.BWL < 1) missing.push('BWL');
+    if (roleCounts2.WK > 8) missing.push('WK (max 8)');
+    if (roleCounts2.BAT > 8) missing.push('BAT (max 8)');
+    if (roleCounts2.AR > 8) missing.push('AR (max 8)');
+    if (roleCounts2.BWL > 8) missing.push('BWL (max 8)');
     btn.textContent = `Need more: ${missing.join(', ')}`;
   } else {
     btn.textContent = `NEXT → (${totalSelected}/11 players)`;
@@ -1868,8 +1883,9 @@ function goToCaptainSelect() {
   // Validate role minimums
   const rc = { WK: 0, BAT: 0, AR: 0, BWL: 0 };
   selectedPlayers.forEach(p => rc[p.role] = (rc[p.role] || 0) + 1);
-  const mins = { WK: 1, BAT: 3, AR: 1, BWL: 3 };
-  const missing = Object.entries(mins).filter(([r, m]) => (rc[r] || 0) < m);
+  const mins = { WK: 1, BAT: 1, AR: 1, BWL: 1 };
+  const maxs = { WK: 8, BAT: 8, AR: 8, BWL: 8 };
+  const missing = Object.entries(mins).filter(([r, m]) => (rc[r] || 0) < m || (rc[r] || 0) > maxs[r]);
   if (missing.length > 0) {
     const msg = missing.map(([r, m]) => `${r}: need ${m}, have ${rc[r]||0}`).join(', ');
     showToast(`Fix team composition: ${msg}`);

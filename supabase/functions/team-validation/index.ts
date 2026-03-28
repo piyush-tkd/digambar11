@@ -105,21 +105,25 @@ serve(async (req) => {
       errors.push(`Max 4 overseas players allowed (got ${overseasCount})`);
     }
 
-    // 7. Role minimums: min 1 WK, 3 BAT, 1 AR, 3 BWL
+    // 7. Role limits: min 1, max 8 per role (Dream11 rules)
     const roleCounts: Record<string, number> = { WK: 0, BAT: 0, AR: 0, BWL: 0 };
     players.forEach(p => { roleCounts[p.role] = (roleCounts[p.role] || 0) + 1; });
 
     if (roleCounts.WK < 1) errors.push('Need at least 1 Wicket-keeper');
-    if (roleCounts.BAT < 3) errors.push('Need at least 3 Batters');
+    if (roleCounts.BAT < 1) errors.push('Need at least 1 Batter');
     if (roleCounts.AR < 1) errors.push('Need at least 1 All-rounder');
-    if (roleCounts.BWL < 3) errors.push('Need at least 3 Bowlers');
+    if (roleCounts.BWL < 1) errors.push('Need at least 1 Bowler');
+    if (roleCounts.WK > 8) errors.push('Max 8 Wicket-keepers');
+    if (roleCounts.BAT > 8) errors.push('Max 8 Batters');
+    if (roleCounts.AR > 8) errors.push('Max 8 All-rounders');
+    if (roleCounts.BWL > 8) errors.push('Max 8 Bowlers');
 
-    // 8. Max 7 from one team
+    // 8. Max 10 from one team (Dream11 rules)
     const teamCounts: Record<string, number> = {};
     players.forEach(p => { teamCounts[p.team] = (teamCounts[p.team] || 0) + 1; });
     for (const [team, count] of Object.entries(teamCounts)) {
-      if (count > 7) {
-        errors.push(`Max 7 players from one team (${team}: ${count})`);
+      if (count > 10) {
+        errors.push(`Max 10 players from one team (${team}: ${count})`);
       }
     }
 
