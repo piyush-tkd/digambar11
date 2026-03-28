@@ -2020,10 +2020,12 @@ async function loadLiveMatchData() {
     } catch(e) { console.warn('Failed to fetch live matches:', e); }
   }
 
-  // ALWAYS refresh from DB for live/upcoming matches to get latest scores
+  // ALWAYS refresh from DB for latest scores
+  // NOTE: Must use getMatches(status) — unfiltered getMatches() has Supabase SDK caching issue
   if (match && typeof D11API !== 'undefined') {
     try {
-      const freshMatch = await D11API.getMatch(match.id);
+      const freshMatches = await D11API.getMatches(match.status || 'live');
+      const freshMatch = freshMatches?.find(m => m.id === match.id);
       if (freshMatch) {
         match = freshMatch;
         window._selectedMatch = freshMatch;
@@ -2053,11 +2055,20 @@ async function loadLiveMatchData() {
   logoB.className = 'team-logo bg-' + codeB.toLowerCase();
   logoB.style.width = '32px'; logoB.style.height = '32px'; logoB.style.fontSize = '10px';
 
-  // 4. Scores
-  document.getElementById('live-score-a').textContent = match.score_a || '—';
-  document.getElementById('live-overs-a').textContent = match.overs_a || codeA;
-  document.getElementById('live-score-b').textContent = match.score_b || '—';
-  document.getElementById('live-overs-b').textContent = match.overs_b || codeB;
+  // 4. Scores — parse "29/3 (4.2)" format into score + overs
+  function parseScore(raw, teamCode) {
+    if (!raw || raw === '—') return { score: '—', overs: teamCode };
+    if (raw === 'Yet to bat') return { score: 'Yet to bat', overs: '' };
+    const m = raw.match(/(\d+\/\d+)\s*\(([^)]+)\)/);
+    if (m) return { score: m[1], overs: m[2] + ' ov' };
+    return { score: raw, overs: teamCode };
+  }
+  const parsedA = parseScore(match.score_a, codeA);
+  const parsedB = parseScore(match.score_b, codeB);
+  document.getElementById('live-score-a').textContent = parsedA.score;
+  document.getElementById('live-overs-a').textContent = parsedA.overs;
+  document.getElementById('live-score-b').textContent = parsedB.score;
+  document.getElementById('live-overs-b').textContent = parsedB.overs;
 
   // 5. Match status
   if (match.status === 'live') {
@@ -2089,16 +2100,19 @@ async function loadLiveMatchData() {
         return;
       }
       try {
-        // Refresh match data
-        const freshMatch = await D11API.getMatch(match.id);
+        // Refresh match data (use getMatches with status filter to bypass SDK cache)
+        const freshMatches = await D11API.getMatches(match.status || 'live');
+        const freshMatch = freshMatches?.find(m => m.id === match.id);
         if (freshMatch) {
           window._selectedMatch = freshMatch;
           match = freshMatch;
-          document.getElementById('live-score-a').textContent = match.score_a || '—';
-          document.getElementById('live-overs-a').textContent = match.overs_a || codeA;
-          document.getElementById('live-score-b').textContent = match.score_b || '—';
-          document.getElementById('live-overs-b').textContent = match.overs_b || codeB;
-          document.getElementById('live-match-status').textContent = match.status_note || 'Match in progress';
+          const pA = parseScore(match.score_a, codeA);
+          const pB = parseScore(match.score_b, codeB);
+          document.getElementById('live-score-a').textContent = pA.score;
+          document.getElementById('live-overs-a').textContent = pA.overs;
+          document.getElementById('live-score-b').textContent = pB.score;
+          document.getElementById('live-overs-b').textContent = pB.overs;
+          document.getElementById('live-match-status').textContent = match.result || match.status_note || 'Match in progress';
           if (match.status === 'completed') {
             document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-grey);">● COMPLETED</span>';
             clearInterval(_liveMatchPollInterval);
