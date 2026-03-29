@@ -197,6 +197,11 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .contest-progress-bar { height: 100%; background: linear-gradient(90deg, var(--d11-red), var(--d11-orange)); border-radius: 2px; transition: width 0.3s; }
 .contest-spots { display: flex; justify-content: space-between; font-size: 10px; color: var(--d11-grey); margin-top: 4px; padding: 0 2px; }
 
+/* Loading spinner */
+@keyframes d11spin { to { transform: rotate(360deg); } }
+.d11-spinner { width:24px;height:24px;border:3px solid rgba(255,255,255,0.15);border-top-color:var(--d11-green);border-radius:50%;animation:d11spin 0.7s linear infinite;display:inline-block;vertical-align:middle; }
+.d11-loader { text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:10px; }
+
 /* Create Team Button */
 .create-team-btn { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--d11-green) 0%, #219150 100%); color: white; border: none; padding: 14px 40px; border-radius: 30px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(39,174,96,0.4); z-index: 10; display: none; letter-spacing: 0.3px; }
 .create-team-btn:active { transform: translateX(-50%) scale(0.95); }
@@ -549,9 +554,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 
       <div class="match-section">
         <div id="matches-container">
-          <div style="text-align:center; padding:40px 0; color:var(--d11-grey); font-size:13px;">
-            Loading matches...
-          </div>
+          <div class="d11-loader"><div class="d11-spinner"></div>Loading matches...</div>
         </div>
       </div>
     </div>
@@ -754,6 +757,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     <div class="player-list" id="player-list" style="flex:1; overflow-y:auto;"></div>
 
     <div class="selection-footer">
+      <div id="team-validation-hint" style="font-size:11px;text-align:center;margin-bottom:6px;min-height:16px;color:var(--d11-orange);"></div>
       <button class="next-btn disabled" id="next-btn" onclick="goToCaptainSelect()">NEXT →</button>
     </div>
   </div>
@@ -1221,7 +1225,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
           <span id="edit-email">—</span>
         </div>
       </div>
-      <button onclick="alert('Profile saved!'); showScreen('profile');" style="width:100%;padding:14px;border-radius:10px;border:none;background:var(--d11-green);color:white;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;">Save Changes</button>
+      <button onclick="showToast('Profile saved!'); showScreen('profile');" style="width:100%;padding:14px;border-radius:10px;border:none;background:var(--d11-green);color:white;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;">Save Changes</button>
     </div>
   </div>
 
@@ -1519,10 +1523,14 @@ function selectMatch(matchId, screen) {
 
 async function loadMatchDetail() {
   const match = window._selectedMatch;
-  if (!match) return;
+  if (!match || !match.id) {
+    showToast('Match data unavailable');
+    showScreen('home');
+    return;
+  }
 
-  const codeA = getTeamCode(match.team_a);
-  const codeB = getTeamCode(match.team_b);
+  const codeA = getTeamCode(match.team_a || 'TBA');
+  const codeB = getTeamCode(match.team_b || 'TBA');
   const shortA = getTeamShort(match.team_a_name || match.team_a);
   const shortB = getTeamShort(match.team_b_name || match.team_b);
 
@@ -1670,7 +1678,7 @@ async function loadHomeMatches() {
     _homeMatchesLoaded = true;
   } catch (err) {
     console.error('loadHomeMatches error:', err);
-    container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--d11-red,#E53935);font-size:13px;">Failed to load matches. Pull down to retry.</div>';
+    container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--d11-red,#E53935);font-size:13px;">Failed to load matches.<br><button onclick="loadHomeMatches()" style="margin-top:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--d11-red);background:transparent;color:var(--d11-red);font-size:13px;font-weight:600;cursor:pointer;">↻ Retry</button></div>';
   }
 }
 
@@ -1808,27 +1816,32 @@ function renderPlayers() {
   document.getElementById('comp-ar-bar').style.width = (roleCounts.AR / 11 * 100) + '%';
   document.getElementById('comp-bwl-bar').style.width = (roleCounts.BWL / 11 * 100) + '%';
 
-  // Next button
+  // Next button + validation hint
   const btn = document.getElementById('next-btn');
+  const hint = document.getElementById('team-validation-hint');
   const roleCounts2 = roleCounts;
   const valid = totalSelected === 11 && roleCounts2.WK >= 1 && roleCounts2.WK <= 8 && roleCounts2.BAT >= 1 && roleCounts2.BAT <= 8 && roleCounts2.AR >= 1 && roleCounts2.AR <= 8 && roleCounts2.BWL >= 1 && roleCounts2.BWL <= 8;
   btn.className = 'next-btn ' + (valid ? 'enabled' : 'disabled');
   if (valid) {
     btn.textContent = 'NEXT → Choose Captain';
+    if (hint) hint.innerHTML = '<span style="color:var(--d11-green);">✓ Team ready!</span>';
   } else if (totalSelected === 11) {
     // 11 selected but role minimums not met
     const missing = [];
-    if (roleCounts2.WK < 1) missing.push('WK');
-    if (roleCounts2.BAT < 1) missing.push('BAT');
-    if (roleCounts2.AR < 1) missing.push('AR');
-    if (roleCounts2.BWL < 1) missing.push('BWL');
+    if (roleCounts2.WK < 1) missing.push('1 WK');
+    if (roleCounts2.BAT < 1) missing.push('1 BAT');
+    if (roleCounts2.AR < 1) missing.push('1 AR');
+    if (roleCounts2.BWL < 1) missing.push('1 BWL');
     if (roleCounts2.WK > 8) missing.push('WK (max 8)');
     if (roleCounts2.BAT > 8) missing.push('BAT (max 8)');
     if (roleCounts2.AR > 8) missing.push('AR (max 8)');
     if (roleCounts2.BWL > 8) missing.push('BWL (max 8)');
-    btn.textContent = `Need more: ${missing.join(', ')}`;
+    btn.textContent = `Need: ${missing.join(', ')}`;
+    if (hint) hint.innerHTML = `<span style="color:var(--d11-red);">⚠ Need at least: ${missing.join(', ')}</span>`;
   } else {
     btn.textContent = `NEXT → (${totalSelected}/11 players)`;
+    const remaining = 11 - totalSelected;
+    if (hint) hint.innerHTML = remaining > 0 ? `Pick ${remaining} more player${remaining > 1 ? 's' : ''}` : '';
   }
 }
 
@@ -2951,7 +2964,7 @@ async function renderMyTeamTab() {
   const matchId = window._selectedMatchId;
   if (!matchId || typeof D11API === 'undefined') return;
 
-  container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;">Loading your team...</div>';
+  container.innerHTML = '<div class="d11-loader"><div class="d11-spinner"></div>Loading your teams...</div>';
 
   try {
     const team = await D11API.getMyTeam(matchId);
@@ -3352,7 +3365,7 @@ function googleLogin() {
 function completeSetup() {
   const squad = document.getElementById('setup-squad').value.trim();
   if (!squad || squad.length < 3 || takenSquadNames.has(squad.toLowerCase())) {
-    alert('Please choose a valid, unique squad name');
+    showToast('Please choose a valid, unique squad name');
     return;
   }
   // Store squad name and go home
@@ -3604,7 +3617,7 @@ googleLogin = async function() {
       return;
     } catch (err) {
       console.error('Google login error:', err);
-      alert('Login failed: ' + (err.message || err));
+      showToast('Login failed: ' + (err.message || err));
       return;
     }
   }
@@ -3616,13 +3629,13 @@ const _originalCompleteSetup = completeSetup;
 completeSetup = async function() {
   const squad = document.getElementById('setup-squad').value.trim();
   if (!squad || squad.length < 3 || takenSquadNames.has(squad.toLowerCase())) {
-    alert('Please choose a valid, unique squad name');
+    showToast('Please choose a valid, unique squad name');
     return;
   }
   if (typeof D11API !== 'undefined') {
     const result = await D11API.setSquadName(squad);
     if (!result.success) {
-      alert(result.error || 'Name already taken');
+      showToast(result.error || 'Name already taken');
       return;
     }
   }
@@ -3644,7 +3657,7 @@ confirmTeam = async function() {
       showScreen('match-detail');
       return;
     }
-    alert(result.errors?.join(', ') || 'Error saving team');
+    showToast(result.errors?.join(', ') || 'Error saving team');
     return;
   }
   _originalConfirmTeam();
