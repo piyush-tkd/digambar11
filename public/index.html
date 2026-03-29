@@ -1637,15 +1637,22 @@ async function loadHomeMatches() {
     } catch(e) { console.log('Could not fetch joined matches:', e); }
 
     const now = new Date();
-    // Derive effective status from date (DB status may be stale/wrong)
-    // A match is ~3.5 hours, so "live" = started within last 4 hours
+    // Use DB status as primary source; use time-based fallback only for 'upcoming' matches
+    // that have already started (DB status may not have been updated yet)
     const MATCH_DURATION_MS = 4 * 60 * 60 * 1000;
     matches.forEach(m => {
       const start = new Date(m.starts_at);
       const elapsed = now - start;
-      if (elapsed < 0) m._effectiveStatus = 'upcoming';           // hasn't started
-      else if (elapsed < MATCH_DURATION_MS) m._effectiveStatus = 'live';  // in progress
-      else m._effectiveStatus = 'completed';                       // finished
+      if (m.status === 'live') {
+        m._effectiveStatus = 'live';
+      } else if (m.status === 'completed') {
+        m._effectiveStatus = 'completed';
+      } else {
+        // DB says 'upcoming' (or null) — check if match has actually started
+        if (elapsed < 0) m._effectiveStatus = 'upcoming';
+        else if (elapsed < MATCH_DURATION_MS) m._effectiveStatus = 'live';
+        else m._effectiveStatus = 'completed';
+      }
       m._joined = joinedMatchIds.has(m.id);
     });
     const live = matches.filter(m => m._effectiveStatus === 'live');
@@ -2267,7 +2274,8 @@ async function loadLiveMatchData() {
   // 2. Populate header
   const codeA = getTeamCode(match.team_a);
   const codeB = getTeamCode(match.team_b);
-  document.getElementById('live-match-title').innerHTML = codeA + ' vs ' + codeB + ' <span style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:500;">• ' + (match.status === 'live' ? 'LIVE' : match.status === 'completed' ? 'COMPLETED' : 'UPCOMING') + '</span>';
+  const effectiveStatus = match._effectiveStatus || match.status;
+  document.getElementById('live-match-title').innerHTML = codeA + ' vs ' + codeB + ' <span style="font-size:11px;color:rgba(255,255,255,0.7);font-weight:500;">• ' + (effectiveStatus === 'live' ? 'LIVE' : effectiveStatus === 'completed' ? 'COMPLETED' : 'UPCOMING') + '</span>';
   document.getElementById('live-match-venue').textContent = match.venue || '';
 
   // 3. Team logos
@@ -2295,13 +2303,13 @@ async function loadLiveMatchData() {
   document.getElementById('live-score-b').textContent = parsedB.score;
   document.getElementById('live-overs-b').textContent = parsedB.overs;
 
-  // 5. Match status
-  if (match.status === 'live') {
+  // 5. Match status (use effectiveStatus for time-aware display)
+  if (effectiveStatus === 'live') {
     document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-red);">● LIVE</span>';
-    document.getElementById('live-match-status').textContent = match.status_note || 'Match in progress';
-  } else if (match.status === 'completed') {
+    document.getElementById('live-match-status').textContent = match.result || 'Match in progress';
+  } else if (effectiveStatus === 'completed') {
     document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-grey);">● COMPLETED</span>';
-    document.getElementById('live-match-status').textContent = match.status_note || 'Match completed';
+    document.getElementById('live-match-status').textContent = match.result || 'Match completed';
   } else {
     const start = new Date(match.starts_at);
     document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-orange);">● UPCOMING</span>';
@@ -2337,7 +2345,7 @@ async function loadLiveMatchData() {
           document.getElementById('live-overs-a').textContent = pA.overs;
           document.getElementById('live-score-b').textContent = pB.score;
           document.getElementById('live-overs-b').textContent = pB.overs;
-          document.getElementById('live-match-status').textContent = match.result || match.status_note || 'Match in progress';
+          document.getElementById('live-match-status').textContent = match.result || 'Match in progress';
           if (match.status === 'completed') {
             document.getElementById('live-status-dot').innerHTML = '<span style="color:var(--d11-grey);">● COMPLETED</span>';
             clearInterval(_liveMatchPollInterval);
