@@ -35,23 +35,26 @@ BEGIN
   END IF;
 
   -- 3. Validate captain exists as a player in this match's teams
-  SELECT EXISTS(
-    SELECT 1 FROM players p
-    JOIN match_players mp ON mp.player_id = p.id AND mp.match_id = NEW.match_id
-    WHERE p.id = NEW.captain_id
-  ) INTO cap_exists;
-  IF NOT cap_exists THEN
-    RAISE EXCEPTION 'Captain must be a valid player in this match';
-  END IF;
+  --    (skip check if match_players not yet populated — pre-match)
+  IF EXISTS(SELECT 1 FROM match_players WHERE match_id = NEW.match_id LIMIT 1) THEN
+    SELECT EXISTS(
+      SELECT 1 FROM players p
+      JOIN match_players mp ON mp.player_id = p.id AND mp.match_id = NEW.match_id
+      WHERE p.id = NEW.captain_id
+    ) INTO cap_exists;
+    IF NOT cap_exists THEN
+      RAISE EXCEPTION 'Captain must be a valid player in this match';
+    END IF;
 
-  -- 4. Validate vice captain exists as a player in this match's teams
-  SELECT EXISTS(
-    SELECT 1 FROM players p
-    JOIN match_players mp ON mp.player_id = p.id AND mp.match_id = NEW.match_id
-    WHERE p.id = NEW.vice_captain_id
-  ) INTO vc_exists;
-  IF NOT vc_exists THEN
-    RAISE EXCEPTION 'Vice Captain must be a valid player in this match';
+    -- 4. Validate vice captain exists as a player in this match's teams
+    SELECT EXISTS(
+      SELECT 1 FROM players p
+      JOIN match_players mp ON mp.player_id = p.id AND mp.match_id = NEW.match_id
+      WHERE p.id = NEW.vice_captain_id
+    ) INTO vc_exists;
+    IF NOT vc_exists THEN
+      RAISE EXCEPTION 'Vice Captain must be a valid player in this match';
+    END IF;
   END IF;
 
   -- 5. Captain != Vice Captain (also enforced by CHECK constraint, but belt and suspenders)
@@ -136,12 +139,15 @@ BEGIN
   END IF;
 
   -- 4. Validate player exists and is in this match
-  IF NOT EXISTS(
-    SELECT 1 FROM players p
-    JOIN match_players mp ON mp.player_id = p.id AND mp.match_id = team_match_id
-    WHERE p.id = NEW.player_id
-  ) THEN
-    RAISE EXCEPTION 'Player is not available for this match';
+  --    (skip check if match_players not yet populated — pre-match)
+  IF EXISTS(SELECT 1 FROM match_players WHERE match_id = team_match_id LIMIT 1) THEN
+    IF NOT EXISTS(
+      SELECT 1 FROM players p
+      JOIN match_players mp ON mp.player_id = p.id AND mp.match_id = team_match_id
+      WHERE p.id = NEW.player_id
+    ) THEN
+      RAISE EXCEPTION 'Player is not available for this match';
+    END IF;
   END IF;
 
   -- 5. Check max 11 players (before this insert)
