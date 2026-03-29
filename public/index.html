@@ -2818,10 +2818,26 @@ async function loadMatchFriends(matchId) {
     try {
       const sb = await D11API.init();
       if (!sb) throw new Error('No supabase');
-      const { data: teams } = await sb
+      let teams = null;
+      const { data: teamsData, error: teamsErr } = await sb
         .from('user_teams')
         .select('id, user_id, captain_id, vice_captain_id, impact_player_id, profiles:user_id(display_name, squad_name)')
         .eq('match_id', matchId);
+      if (teamsErr) {
+        console.warn('loadMatchFriends RLS query failed, falling back to own teams:', teamsErr.message);
+        // Fallback: at least show own team
+        const user = await D11API.getUser();
+        if (user) {
+          const { data: own } = await sb
+            .from('user_teams')
+            .select('id, user_id, captain_id, vice_captain_id, impact_player_id, profiles:user_id(display_name, squad_name)')
+            .eq('match_id', matchId)
+            .eq('user_id', user.id);
+          teams = own;
+        }
+      } else {
+        teams = teamsData;
+      }
 
       const count = teams ? teams.length : 0;
       countEl.textContent = count + ' joined';
@@ -3074,9 +3090,20 @@ async function checkUserTeamStatus(matchId) {
       const players = team.user_team_players.map(tp => tp.players).filter(Boolean);
       const capPlayer = players.find(p => p.id === team.captain_id);
       const vcPlayer = players.find(p => p.id === team.vice_captain_id);
-      // IP is 12th man — not in user_team_players, look up from loaded players
-      const allP = getAllPlayers();
-      const ipPlayer = allP.find(p => p.id === team.impact_player_id);
+      // IP is 12th man — not in user_team_players
+      // Try in-memory first, then fetch from DB if not loaded yet
+      let ipPlayer = null;
+      if (team.impact_player_id) {
+        const allP = getAllPlayers();
+        ipPlayer = allP.find(p => p.id === team.impact_player_id);
+        if (!ipPlayer && typeof D11API !== 'undefined') {
+          try {
+            const sb = await D11API.init();
+            const { data: ipData } = await sb.from('players').select('id, name').eq('id', team.impact_player_id).single();
+            if (ipData) ipPlayer = ipData;
+          } catch(e) { /* fallback gracefully */ }
+        }
+      }
       const summaryEl = document.getElementById('my-team-mini-summary');
       if (summaryEl) {
         summaryEl.textContent = `C: ${capPlayer?.name || '—'} • VC: ${vcPlayer?.name || '—'} • IP: ${ipPlayer?.name || '—'} • ${players.length + (ipPlayer ? 1 : 0)} players`;
@@ -3613,6 +3640,13 @@ showScreen = function(id) {
     switchMatchTab(0);
     loadMatchFriends(window._selectedMatchId);
     checkUserTeamStatus(window._selectedMatchId);
+  }
+  // Refresh wallet badge on any screen change
+  if (typeof D11API !== 'undefined' && D11API.getBalance) {
+    D11API.getBalance().then(bal => {
+      const badge = document.getElementById('wallet-balance-badge');
+      if (badge) badge.textContent = '₹' + bal;
+    }).catch(() => {});
   }
 };
 </script>
