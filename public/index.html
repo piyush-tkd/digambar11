@@ -594,7 +594,25 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="contest-tab" onclick="switchMatchTab(2)">Leaderboard</div>
     </div>
 
-    <div style="flex:1; overflow-y:auto; padding-bottom: 80px;">
+    <!-- Tab content area -->
+    <div id="md-tab-friends" style="flex:1; overflow-y:auto; padding-bottom: 80px;">
+      <!-- User's Team Status Card (shown after team creation) -->
+      <div id="my-team-status" style="display:none; padding:16px 16px 0;">
+        <div style="background:linear-gradient(135deg, rgba(39,174,96,0.15), rgba(47,128,237,0.1)); border:1px solid var(--d11-green); border-radius:12px; padding:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:var(--d11-green);"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              <span style="font-size:14px; font-weight:700; color:var(--d11-green);">Your Team is Ready!</span>
+            </div>
+            <button id="edit-team-btn" onclick="editTeam()" style="background:var(--d11-blue);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+              <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:#fff;vertical-align:middle;margin-right:4px;"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+              Edit Team
+            </button>
+          </div>
+          <div id="my-team-mini-summary" style="font-size:11px; color:var(--d11-grey);"></div>
+        </div>
+      </div>
+
       <!-- Friends League Info -->
       <div style="padding:16px;">
         <div class="contest-card fade-in">
@@ -665,7 +683,17 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       </div>
     </div>
 
-    <div class="create-team-btn visible" onclick="showScreen('team-select')">+ Create Team</div>
+    <!-- My Team tab content (hidden by default) -->
+    <div id="md-tab-myteam" style="display:none; flex:1; overflow-y:auto; padding-bottom: 80px;">
+      <div id="myteam-content" style="padding:16px;">
+        <div style="text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;">
+          You haven't created a team yet.<br>
+          <button onclick="showScreen('team-select')" style="margin-top:12px;background:var(--d11-green);color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">+ Create Team</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="create-team-btn visible" id="create-team-btn" onclick="showScreen('team-select')">+ Create Team</div>
   </div>
 
   <!-- ===== SCREEN: TEAM SELECTION ===== -->
@@ -1636,7 +1664,18 @@ function showScreen(id) {
   if (createBtn) createBtn.classList.toggle('visible', id === 'match-detail');
   if (id === 'home') loadHomeMatches();
   if (id === 'match-detail') loadMatchDetail();
-  if (id === 'team-select') { resetTeamSelection(); renderPlayers(); }
+  if (id === 'team-select') {
+    if (window._editingTeam) {
+      // Editing — don't reset, just render with pre-populated state
+      window._editingTeam = false;
+    } else {
+      resetTeamSelection();
+    }
+    renderPlayers();
+    // Update header text
+    const tsHeader = document.querySelector('#screen-team-select .header-title');
+    if (tsHeader && !window._editingTeam) tsHeader.textContent = 'Create Team';
+  }
   if (id === 'live-match') loadLiveMatchData();
   if (id === 'my-matches') loadMyMatches();
   if (id === 'admin') loadAdminPanel();
@@ -2747,26 +2786,31 @@ async function loadMatchFriends(matchId) {
         statusEl.textContent = 'Need ' + (2 - count) + ' more to start';
       }
 
-      // Render friends list
+      // Render friends list — hide squad details, just show name + "Joined" badge
       const currentUser = await D11API.getUser();
       const currentUserId = currentUser?.id;
       const colors = ['var(--d11-red),var(--d11-orange)', 'var(--d11-blue),#6C2BD9', 'var(--d11-gold),var(--d11-orange)', 'var(--d11-green),#1ABC9C', '#9B59B6,var(--d11-red)'];
 
+      // Check if match has started — if so, we can show more details
+      const match = window._selectedMatch;
+      const matchStarted = match && new Date(match.starts_at) <= new Date();
+
       listEl.innerHTML = (teams || []).map((t, i) => {
         const name = t.profiles?.display_name || 'Player';
-        const squad = t.profiles?.squad_name || 'My Team';
         const isYou = t.user_id === currentUserId;
         const initial = name.charAt(0).toUpperCase();
         const color = colors[i % colors.length];
         const radius = (teams.length === 1) ? '10px' : (i === 0 ? '10px 10px 0 0' : i === teams.length - 1 ? '0 0 10px 10px' : '0');
+        // Before match starts: only show name, no squad details
+        const subtitle = matchStarted ? (t.profiles?.squad_name || 'Team Ready') : 'Team Created';
         return `<div style="display:flex; align-items:center; padding:10px 12px; background:var(--d11-card); border-radius:${radius};">
           <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,${color});display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;margin-right:10px;">${initial}</div>
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:600;">${name}${isYou ? ' <span style="font-size:10px;background:var(--d11-red);padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;">YOU</span>' : ''}</div>
-            <div style="font-size:10px;color:var(--d11-grey);">${squad}</div>
+            <div style="font-size:10px;color:var(--d11-grey);">${subtitle}</div>
           </div>
           <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--d11-green);font-weight:600;">
-            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:var(--d11-green);"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Ready
+            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:var(--d11-green);"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Joined
           </div>
         </div>`;
       }).join('');
@@ -2799,8 +2843,208 @@ async function loadMatchFriends(matchId) {
 function switchMatchTab(idx) {
   const tabs = document.querySelectorAll('#match-tabs .contest-tab');
   tabs.forEach((t, i) => t.classList.toggle('active', i === idx));
-  // Tab 0 = Friends League (already shown), Tab 1 = My Team, Tab 2 = Leaderboard
+
+  // Show/hide tab content panels
+  const friendsTab = document.getElementById('md-tab-friends');
+  const myteamTab = document.getElementById('md-tab-myteam');
+  if (friendsTab) friendsTab.style.display = idx === 0 ? '' : 'none';
+  if (myteamTab) myteamTab.style.display = idx === 1 ? '' : 'none';
+
+  if (idx === 1) renderMyTeamTab();
   if (idx === 2) showScreen('live-match');
+}
+
+// ====== MY TEAM TAB RENDERING ======
+async function renderMyTeamTab() {
+  const container = document.getElementById('myteam-content');
+  if (!container) return;
+  const matchId = window._selectedMatchId;
+  if (!matchId || typeof D11API === 'undefined') return;
+
+  container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;">Loading your team...</div>';
+
+  try {
+    const team = await D11API.getMyTeam(matchId);
+    if (!team || !team.user_team_players || team.user_team_players.length === 0) {
+      container.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;">
+        You haven't created a team yet.<br>
+        <button onclick="showScreen('team-select')" style="margin-top:12px;background:var(--d11-green);color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">+ Create Team</button>
+      </div>`;
+      return;
+    }
+
+    // Build player list grouped by role
+    const players = team.user_team_players.map(tp => tp.players).filter(Boolean);
+    const roles = { WK: [], BAT: [], AR: [], BWL: [] };
+    players.forEach(p => { if (roles[p.role]) roles[p.role].push(p); });
+
+    const roleLabels = { WK: 'WICKET-KEEPER', BAT: 'BATTERS', AR: 'ALL-ROUNDERS', BWL: 'BOWLERS' };
+    const roleColors = { WK: '#F2C94C', BAT: '#2F80ED', AR: '#27AE60', BWL: '#9B59B6' };
+
+    let html = '';
+
+    // Team summary header
+    const totalCredits = players.reduce((s, p) => s + parseFloat(p.credit || 0), 0);
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:16px;font-weight:800;">Your XI</div>
+      <div style="font-size:12px;color:var(--d11-grey);">Credits: ${totalCredits.toFixed(1)}/100</div>
+    </div>`;
+
+    // Players by role
+    Object.entries(roles).forEach(([role, rPlayers]) => {
+      if (rPlayers.length === 0) return;
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:${roleColors[role]};text-transform:uppercase;margin-bottom:6px;letter-spacing:1px;">${roleLabels[role]} (${rPlayers.length})</div>`;
+      rPlayers.forEach(p => {
+        const isCap = p.id === team.captain_id;
+        const isVC = p.id === team.vice_captain_id;
+        const isIP = p.id === team.impact_player_id;
+        const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2);
+        const badge = isCap ? '<span style="background:var(--d11-gold);color:#000;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:800;margin-left:6px;">C</span>'
+          : isVC ? '<span style="background:var(--d11-blue);color:#fff;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:800;margin-left:6px;">VC</span>'
+          : isIP ? '<span style="background:#F2994A;color:#fff;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:800;margin-left:6px;">IP</span>'
+          : '';
+        const teamCode = getTeamCode(p.team || '');
+        html += `<div style="display:flex;align-items:center;padding:8px 10px;background:var(--d11-card);border-radius:8px;margin-bottom:4px;">
+          <div style="width:30px;height:30px;border-radius:50%;background:${TEAM_COLORS[teamCode] || '#555'};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;margin-right:10px;">${initials}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">${p.name}${badge}</div>
+            <div style="font-size:10px;color:var(--d11-grey);">${teamCode} • ${p.credit} Cr</div>
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+    });
+
+    // Edit button at bottom
+    const match = window._selectedMatch;
+    const matchStarted = match && new Date(match.starts_at) <= new Date();
+    if (!matchStarted) {
+      html += `<button onclick="editTeam()" style="width:100%;margin-top:12px;padding:12px;border-radius:10px;background:var(--d11-blue);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;">
+        Edit Team
+      </button>`;
+    } else {
+      html += `<div style="text-align:center;margin-top:12px;font-size:12px;color:var(--d11-grey);">Match has started — team is locked</div>`;
+    }
+
+    container.innerHTML = html;
+  } catch (err) {
+    console.error('renderMyTeamTab error:', err);
+    container.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;">Failed to load your team.</div>';
+  }
+}
+
+// ====== EDIT TEAM (pre-populate saved team and go to team-select) ======
+async function editTeam() {
+  const matchId = window._selectedMatchId;
+  if (!matchId || typeof D11API === 'undefined') return;
+
+  // Check if match already started
+  const match = window._selectedMatch;
+  if (match && new Date(match.starts_at) <= new Date()) {
+    showToast('Match has started — team is locked');
+    return;
+  }
+
+  try {
+    const team = await D11API.getMyTeam(matchId);
+    if (!team || !team.user_team_players) {
+      showScreen('team-select');
+      return;
+    }
+
+    // Pre-populate state from saved team
+    const allPlayers = getAllPlayers();
+    selectedPlayers = [];
+    team.user_team_players.forEach(tp => {
+      const match = allPlayers.find(p => p.id === tp.player_id);
+      if (match) selectedPlayers.push(match);
+    });
+    captainId = team.captain_id;
+    viceCaptainId = team.vice_captain_id;
+    impactPlayerId = team.impact_player_id;
+
+    // Set edit mode flag
+    window._editingTeam = true;
+
+    // Go to team-select WITHOUT resetting (skip the resetTeamSelection)
+    document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display = 'none'; });
+    const el = document.getElementById('screen-team-select');
+    if (el) { el.style.display = 'flex'; el.classList.add('active'); }
+    document.getElementById('bottom-nav').style.display = 'none';
+    const createBtn = document.querySelector('.create-team-btn');
+    if (createBtn) createBtn.classList.remove('visible');
+
+    // Update header to show Edit mode
+    const tsHeader = document.querySelector('#screen-team-select .header-title');
+    if (tsHeader) tsHeader.textContent = 'Edit Team';
+
+    // Render with pre-selected players
+    currentRole = 'WK';
+    document.querySelectorAll('#screen-team-select .role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === 'WK'));
+    renderPlayers();
+  } catch (err) {
+    console.error('editTeam error:', err);
+    showToast('Failed to load team for editing');
+  }
+}
+
+// ====== CHECK USER TEAM ON MATCH DETAIL LOAD ======
+async function checkUserTeamStatus(matchId) {
+  const statusEl = document.getElementById('my-team-status');
+  const createBtn = document.getElementById('create-team-btn');
+  if (!statusEl) return;
+
+  if (!matchId || typeof D11API === 'undefined') {
+    statusEl.style.display = 'none';
+    return;
+  }
+
+  try {
+    const team = await D11API.getMyTeam(matchId);
+    if (team && team.user_team_players && team.user_team_players.length > 0) {
+      // User has a team — show status card, change button to Edit
+      statusEl.style.display = '';
+
+      // Mini summary: C, VC, IP names
+      const players = team.user_team_players.map(tp => tp.players).filter(Boolean);
+      const capPlayer = players.find(p => p.id === team.captain_id);
+      const vcPlayer = players.find(p => p.id === team.vice_captain_id);
+      const ipPlayer = players.find(p => p.id === team.impact_player_id);
+      const summaryEl = document.getElementById('my-team-mini-summary');
+      if (summaryEl) {
+        summaryEl.textContent = `C: ${capPlayer?.name || '—'} • VC: ${vcPlayer?.name || '—'} • IP: ${ipPlayer?.name || '—'} • ${players.length} players`;
+      }
+
+      // Change bottom button to Edit Team
+      if (createBtn) {
+        createBtn.textContent = 'Edit Team';
+        createBtn.setAttribute('onclick', 'editTeam()');
+      }
+
+      // Lock edit if match started
+      const match = window._selectedMatch;
+      if (match && new Date(match.starts_at) <= new Date()) {
+        const editBtn = document.getElementById('edit-team-btn');
+        if (editBtn) {
+          editBtn.disabled = true;
+          editBtn.style.opacity = '0.5';
+          editBtn.textContent = 'Locked';
+        }
+        if (createBtn) createBtn.style.display = 'none';
+      }
+    } else {
+      // No team — show Create Team button as before
+      statusEl.style.display = 'none';
+      if (createBtn) {
+        createBtn.textContent = '+ Create Team';
+        createBtn.setAttribute('onclick', "showScreen('team-select')");
+      }
+    }
+  } catch (err) {
+    console.log('checkUserTeamStatus:', err);
+    statusEl.style.display = 'none';
+  }
 }
 
 // ====== MY MATCHES ======
@@ -3294,12 +3538,15 @@ window.addEventListener('load', () => {
   initApp();
 });
 
-// Patch showScreen to add dynamic friends loading on match detail
+// Patch showScreen to add dynamic friends loading + team status check on match detail
 const _preSimShowScreen = showScreen;
 showScreen = function(id) {
   _preSimShowScreen(id);
   if (id === 'match-detail' && window._selectedMatchId) {
+    // Reset to Friends League tab
+    switchMatchTab(0);
     loadMatchFriends(window._selectedMatchId);
+    checkUserTeamStatus(window._selectedMatchId);
   }
 };
 </script>
