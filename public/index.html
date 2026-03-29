@@ -3983,7 +3983,8 @@ async function loadMyMatches() {
         timeStr = d > 0 ? start.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : h + 'h ' + m + 'm';
         timeColor = 'var(--d11-orange)';
       }
-      return `<div class="my-team-card fade-in" style="cursor:pointer;" onclick="selectMatch('${t.match_id}', '${isLive ? 'live-match' : 'match-detail'}')">
+      const matchCategory = isLive ? 'live' : isCompleted ? 'completed' : 'upcoming';
+      return `<div class="my-team-card fade-in" data-match-status="${matchCategory}" style="cursor:pointer;" onclick="selectMatch('${t.match_id}', '${isLive ? 'live-match' : 'match-detail'}')">
         <div class="my-team-header">
           <div>
             <div class="my-team-label">${codeA} vs ${codeB}</div>
@@ -3996,6 +3997,10 @@ async function loadMyMatches() {
         </div>
       </div>`;
     }).join('');
+
+    // Apply active tab filter after rendering
+    const activeTab = document.querySelector('#mm-tabs .mm-tab.active');
+    if (activeTab) switchMMTab(activeTab);
   } catch (err) {
     console.error('loadMyMatches error:', err);
   }
@@ -4004,6 +4009,34 @@ async function loadMyMatches() {
 function switchMMTab(el) {
   document.querySelectorAll('#mm-tabs .mm-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
+
+  const filter = el.textContent.trim().toLowerCase(); // 'upcoming', 'live', 'completed'
+  const cards = document.querySelectorAll('#my-matches-list .my-team-card');
+  let visible = 0;
+  cards.forEach(card => {
+    const status = card.getAttribute('data-match-status');
+    if (status === filter) {
+      card.style.display = '';
+      visible++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+
+  // Show empty state if no matches in this tab
+  let emptyEl = document.getElementById('mm-empty-state');
+  if (!emptyEl) {
+    emptyEl = document.createElement('div');
+    emptyEl.id = 'mm-empty-state';
+    emptyEl.style.cssText = 'text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;';
+    document.getElementById('my-matches-list').appendChild(emptyEl);
+  }
+  if (visible === 0) {
+    emptyEl.textContent = `No ${filter} matches`;
+    emptyEl.style.display = '';
+  } else {
+    emptyEl.style.display = 'none';
+  }
 }
 
 // ====== LOGIN & ONBOARDING ======

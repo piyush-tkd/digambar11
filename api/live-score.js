@@ -133,12 +133,29 @@ async function getProviderKey(providerId) {
 // ─── DB Helpers ─────────────────────────────────────────────
 async function getDbLiveMatches() {
   // Include 'completed' matches from last 6 hours for final fantasy pass
-  const sixHoursAgo = new Date(Date.now() - 6 * 3600000).toISOString();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('matches')
     .select('id, external_id, team_a, team_b, status, starts_at')
-    .or(`status.in.(live,upcoming),and(status.eq.completed,updated_at.gte.${sixHoursAgo})`);
-  return data || [];
+    .in('status', ['live', 'upcoming', 'completed']);
+
+  if (error) {
+    console.error('[DB] getDbLiveMatches error:', error.message);
+    return [];
+  }
+
+  // Filter out completed matches older than 6 hours
+  const sixHoursAgo = Date.now() - 6 * 3600000;
+  const filtered = (data || []).filter(m => {
+    if (m.status === 'completed') {
+      const startTime = new Date(m.starts_at).getTime();
+      // Keep completed matches only if they started within last 10 hours
+      return startTime > (Date.now() - 10 * 3600000);
+    }
+    return true;
+  });
+
+  console.log(`[DB] Found ${filtered.length} matches (${data?.length} total, filtered completed older than 10h)`);
+  return filtered;
 }
 
 function findDbMatch(dbMatches, codeA, codeB) {
