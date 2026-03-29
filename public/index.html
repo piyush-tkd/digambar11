@@ -1674,7 +1674,8 @@ function showScreen(id) {
   if (id === 'home') loadHomeMatches();
   if (id === 'match-detail') loadMatchDetail();
   if (id === 'team-select') {
-    if (window._editingTeam) {
+    const isEditing = window._editingTeam;
+    if (isEditing) {
       // Editing — don't reset, just render with pre-populated state
       window._editingTeam = false;
     } else {
@@ -1683,7 +1684,7 @@ function showScreen(id) {
     renderPlayers();
     // Update header text
     const tsHeader = document.querySelector('#screen-team-select .header-title');
-    if (tsHeader && !window._editingTeam) tsHeader.textContent = 'Create Team';
+    if (tsHeader) tsHeader.textContent = isEditing ? 'Edit Team' : 'Create Team';
   }
   if (id === 'live-match') loadLiveMatchData();
   if (id === 'my-matches') loadMyMatches();
@@ -1971,6 +1972,11 @@ function saveTeam() {
   if (!captainId || !viceCaptainId || !impactPlayerId) return;
   showScreen('preview');
   renderPreview();
+  // Reset preview nav to normal create flow
+  const previewBackBtn = document.querySelector('#screen-preview .back-btn');
+  if (previewBackBtn) previewBackBtn.setAttribute('onclick', "showScreen('impact')");
+  const previewEditBtn = document.querySelector('#screen-preview .selection-footer .next-btn');
+  if (previewEditBtn) previewEditBtn.setAttribute('onclick', "showScreen('impact')");
 }
 
 function renderPreview() {
@@ -2993,25 +2999,20 @@ async function editTeam() {
     viceCaptainId = team.vice_captain_id;
     impactPlayerId = team.impact_player_id;
 
-    // Set edit mode flag
+    // Set edit mode flag so team-select won't reset selections
     window._editingTeam = true;
 
-    // Go to team-select WITHOUT resetting (skip the resetTeamSelection)
-    document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.style.display = 'none'; });
-    const el = document.getElementById('screen-team-select');
-    if (el) { el.style.display = 'flex'; el.classList.add('active'); }
-    document.getElementById('bottom-nav').style.display = 'none';
-    const createBtn = document.querySelector('.create-team-btn');
-    if (createBtn) createBtn.classList.remove('visible');
+    // Show the Preview screen first (like the screenshot with field layout)
+    showScreen('preview');
+    renderPreview();
 
-    // Update header to show Edit mode
-    const tsHeader = document.querySelector('#screen-team-select .header-title');
-    if (tsHeader) tsHeader.textContent = 'Edit Team';
-
-    // Render with pre-selected players
-    currentRole = 'WK';
-    document.querySelectorAll('#screen-team-select .role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === 'WK'));
-    renderPlayers();
+    // In edit mode: back button → match-detail, EDIT button → team-select (with pre-populated players)
+    const previewBackBtn = document.querySelector('#screen-preview .back-btn');
+    if (previewBackBtn) previewBackBtn.setAttribute('onclick', "showScreen('match-detail')");
+    const previewEditBtn = document.querySelector('#screen-preview .selection-footer .next-btn');
+    if (previewEditBtn) {
+      previewEditBtn.setAttribute('onclick', "window._editingTeam = true; showScreen('team-select')");
+    }
   } catch (err) {
     console.error('editTeam error:', err);
     showToast('Failed to load team for editing');
