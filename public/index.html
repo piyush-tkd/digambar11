@@ -736,15 +736,15 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       <div class="header-left">
         <div class="back-btn" onclick="showScreen('team-select')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
-          <div class="header-title" style="font-size:15px;">Choose C, VC & Impact Player</div>
+          <div class="header-title" style="font-size:15px;">Choose Captain & Vice Captain</div>
           <div class="header-subtitle" id="captain-match-sub">Select Match</div>
         </div>
       </div>
     </div>
 
     <div class="captain-header">
-      <div class="captain-title">Choose Captain, Vice Captain & Impact Player</div>
-      <div class="captain-sub">C gets 2x pts, VC gets 1.5x pts, IP gets +4 bonus pts</div>
+      <div class="captain-title">Choose Captain & Vice Captain</div>
+      <div class="captain-sub">C gets 2x pts, VC gets 1.5x pts</div>
       <div class="captain-badges">
         <div class="captain-badge-item">
           <div class="captain-badge-circle c" id="cap-c-badge">C</div>
@@ -756,6 +756,32 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
           <div class="captain-badge-label">VICE CAPTAIN</div>
           <div class="captain-badge-pts">1.5x Points</div>
         </div>
+      </div>
+    </div>
+
+    <div id="captain-list" style="flex:1; overflow-y:auto;"></div>
+
+    <div class="selection-footer">
+      <button class="next-btn disabled" id="captain-next-btn" onclick="goToImpactPlayer()">NEXT →</button>
+    </div>
+  </div>
+
+  <!-- ===== SCREEN: IMPACT PLAYER (12th Man) ===== -->
+  <div class="screen" id="screen-impact">
+    <div class="header" style="padding: 10px 16px;">
+      <div class="header-left">
+        <div class="back-btn" onclick="showScreen('captain')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
+        <div>
+          <div class="header-title" style="font-size:15px;">Choose Impact Player</div>
+          <div class="header-subtitle" id="impact-match-sub">12th Man — +4 Bonus Pts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="captain-header">
+      <div class="captain-title">Pick your 12th Man</div>
+      <div class="captain-sub">Choose 1 additional player as Impact Player. Gets +4 bonus points if they play.</div>
+      <div class="captain-badges">
         <div class="captain-badge-item">
           <div class="captain-badge-circle ip" id="cap-ip-badge">IP</div>
           <div class="captain-badge-label">IMPACT PLAYER</div>
@@ -764,7 +790,16 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       </div>
     </div>
 
-    <div id="captain-list" style="flex:1; overflow-y:auto;"></div>
+    <!-- Role filter tabs for impact player -->
+    <div class="role-tabs" style="padding: 0 12px;">
+      <div class="role-tab active" data-role="ALL" onclick="filterImpactRole('ALL')">ALL</div>
+      <div class="role-tab" data-role="WK" onclick="filterImpactRole('WK')">WK</div>
+      <div class="role-tab" data-role="BAT" onclick="filterImpactRole('BAT')">BAT</div>
+      <div class="role-tab" data-role="AR" onclick="filterImpactRole('AR')">AR</div>
+      <div class="role-tab" data-role="BWL" onclick="filterImpactRole('BWL')">BWL</div>
+    </div>
+
+    <div id="impact-player-list" style="flex:1; overflow-y:auto;"></div>
 
     <div class="selection-footer">
       <button class="next-btn disabled" id="save-team-btn" onclick="saveTeam()">SAVE TEAM</button>
@@ -775,7 +810,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
   <div class="screen" id="screen-preview">
     <div class="header" style="padding: 10px 16px;">
       <div class="header-left">
-        <div class="back-btn" onclick="showScreen('captain')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
+        <div class="back-btn" onclick="showScreen('impact')"><svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg></div>
         <div>
           <div class="header-title" style="font-size:15px;">Team Preview</div>
           <div class="header-subtitle" id="preview-match-sub">—</div>
@@ -789,7 +824,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
     </div>
 
     <div class="selection-footer" style="display:flex; gap:10px;">
-      <button class="next-btn enabled" style="flex:1;" onclick="showScreen('captain')">✏️ EDIT</button>
+      <button class="next-btn enabled" style="flex:1;" onclick="showScreen('impact')">✏️ EDIT</button>
       <button class="next-btn enabled" style="flex:1; background: linear-gradient(135deg, var(--d11-red), #C41420);" onclick="confirmTeam()">CONTINUE →</button>
     </div>
   </div>
@@ -1791,7 +1826,6 @@ function renderCaptainList() {
     const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2);
     const isCap = captainId === p.id;
     const isVC = viceCaptainId === p.id;
-    const isIP = impactPlayerId === p.id;
     return `<div class="captain-player">
       <div class="captain-player-info">
         <div class="player-avatar" style="margin-right:10px;">
@@ -1806,36 +1840,82 @@ function renderCaptainList() {
       <div class="captain-actions">
         <button class="cap-btn ${isCap ? 'c-selected' : ''}" onclick="setCaptain('${p.id}')">C</button>
         <button class="cap-btn ${isVC ? 'vc-selected' : ''}" onclick="setViceCaptain('${p.id}')">VC</button>
-        <button class="cap-btn ${isIP ? 'ip-selected' : ''}" onclick="setImpactPlayer('${p.id}')">IP</button>
       </div>
     </div>`;
   }).join('');
 
-  const btn = document.getElementById('save-team-btn');
-  const valid = captainId && viceCaptainId && impactPlayerId
-    && captainId !== viceCaptainId && captainId !== impactPlayerId && viceCaptainId !== impactPlayerId;
+  const btn = document.getElementById('captain-next-btn');
+  const valid = captainId && viceCaptainId && captainId !== viceCaptainId;
   btn.className = 'next-btn ' + (valid ? 'enabled' : 'disabled');
 }
 
 function setCaptain(id) {
   if (viceCaptainId === id) viceCaptainId = null;
-  if (impactPlayerId === id) impactPlayerId = null;
   captainId = captainId === id ? null : id;
   renderCaptainList();
 }
 
 function setViceCaptain(id) {
   if (captainId === id) captainId = null;
-  if (impactPlayerId === id) impactPlayerId = null;
   viceCaptainId = viceCaptainId === id ? null : id;
   renderCaptainList();
 }
 
-function setImpactPlayer(id) {
-  if (captainId === id) captainId = null;
-  if (viceCaptainId === id) viceCaptainId = null;
+// ====== IMPACT PLAYER (12th Man) ======
+let impactRoleFilter = 'ALL';
+
+function goToImpactPlayer() {
+  if (!captainId || !viceCaptainId || captainId === viceCaptainId) return;
+  impactPlayerId = null;
+  impactRoleFilter = 'ALL';
+  showScreen('impact');
+  renderImpactPlayerList();
+}
+
+function filterImpactRole(role) {
+  impactRoleFilter = role;
+  document.querySelectorAll('#screen-impact .role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === role));
+  renderImpactPlayerList();
+}
+
+function renderImpactPlayerList() {
+  const list = document.getElementById('impact-player-list');
+  const selectedIds = new Set(selectedPlayers.map(p => p.id));
+  // Show all available players NOT in the 11
+  let available = getAllPlayers().filter(p => !selectedIds.has(p.id));
+  if (impactRoleFilter !== 'ALL') {
+    available = available.filter(p => p.role === impactRoleFilter);
+  }
+  // Sort by credit descending
+  available.sort((a, b) => b.credit - a.credit);
+
+  list.innerHTML = available.map(p => {
+    const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2);
+    const isSelected = impactPlayerId === p.id;
+    return `<div class="captain-player ${isSelected ? 'selected' : ''}" onclick="selectImpactPlayer('${p.id}')" style="${isSelected ? 'background: rgba(0,200,100,0.15); border-left: 3px solid var(--d11-green);' : ''}">
+      <div class="captain-player-info">
+        <div class="player-avatar" style="margin-right:10px;">
+          <div class="avatar-text">${initials}</div>
+          <div class="player-team-dot" style="background:${TEAM_COLORS[p.team]}">${p.team.slice(0,1)}</div>
+        </div>
+        <div class="player-info">
+          <div class="player-name">${p.name}</div>
+          <div class="player-meta"><span>${p.team}</span><span>${p.role}</span><span>${p.credit} Cr</span></div>
+        </div>
+      </div>
+      <div class="captain-actions">
+        <button class="cap-btn ${isSelected ? 'ip-selected' : ''}" style="pointer-events:none;">IP</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const btn = document.getElementById('save-team-btn');
+  btn.className = 'next-btn ' + (impactPlayerId ? 'enabled' : 'disabled');
+}
+
+function selectImpactPlayer(id) {
   impactPlayerId = impactPlayerId === id ? null : id;
-  renderCaptainList();
+  renderImpactPlayerList();
 }
 
 // ====== TEAM PREVIEW ======
@@ -1864,14 +1944,12 @@ function renderPreview() {
       const initials = p.name.split(' ').map(w => w[0]).join('').slice(0, 2);
       const isCap = captainId === p.id;
       const isVC = viceCaptainId === p.id;
-      const isIP = impactPlayerId === p.id;
       const fullName = p.name;
       html += `<div class="preview-player">
         <div class="preview-avatar" style="background:${TEAM_COLORS[p.team]}">
           ${initials}
           ${isCap ? '<div class="cap-badge c">C</div>' : ''}
           ${isVC ? '<div class="cap-badge vc">VC</div>' : ''}
-          ${isIP ? '<div class="cap-badge ip">IP</div>' : ''}
         </div>
         <div class="preview-pname">${fullName}</div>
         <div class="preview-credits">${p.credit} Cr</div>
@@ -1879,6 +1957,25 @@ function renderPreview() {
     });
     html += '</div>';
   });
+
+  // Show Impact Player (12th man) as a separate section
+  if (impactPlayerId) {
+    const ip = getAllPlayers().find(p => p.id === impactPlayerId);
+    if (ip) {
+      const ipInitials = ip.name.split(' ').map(w => w[0]).join('').slice(0, 2);
+      html += `<div class="preview-section" style="border-top: 2px dashed rgba(255,255,255,0.3); padding-top: 8px; margin-top: 4px;">
+        <div class="preview-role-label" style="color: #F2994A;">12th MAN — IMPACT PLAYER</div>
+        <div class="preview-player">
+          <div class="preview-avatar" style="background:${TEAM_COLORS[ip.team]}; border: 2px solid #F2994A;">
+            ${ipInitials}
+            <div class="cap-badge ip">IP</div>
+          </div>
+          <div class="preview-pname">${ip.name}</div>
+          <div class="preview-credits">${ip.credit} Cr</div>
+        </div>
+      </div>`;
+    }
+  }
 
   field.innerHTML = html;
 }
