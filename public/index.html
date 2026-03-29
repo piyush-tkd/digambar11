@@ -2821,7 +2821,7 @@ async function loadMatchFriends(matchId) {
       let teams = null;
       const { data: teamsData, error: teamsErr } = await sb
         .from('user_teams')
-        .select('id, user_id, captain_id, vice_captain_id, impact_player_id, profiles:user_id(display_name, squad_name)')
+        .select('id, user_id, captain_id, vice_captain_id, impact_player_id, profiles:user_id(name, squad_name)')
         .eq('match_id', matchId);
       if (teamsErr) {
         console.warn('loadMatchFriends RLS query failed, falling back to own teams:', teamsErr.message);
@@ -2830,7 +2830,7 @@ async function loadMatchFriends(matchId) {
         if (user) {
           const { data: own } = await sb
             .from('user_teams')
-            .select('id, user_id, captain_id, vice_captain_id, impact_player_id, profiles:user_id(display_name, squad_name)')
+            .select('id, user_id, captain_id, vice_captain_id, impact_player_id, profiles:user_id(name, squad_name)')
             .eq('match_id', matchId)
             .eq('user_id', user.id);
           teams = own;
@@ -2861,7 +2861,7 @@ async function loadMatchFriends(matchId) {
       const matchStarted = match && new Date(match.starts_at) <= new Date();
 
       listEl.innerHTML = (teams || []).map((t, i) => {
-        const name = t.profiles?.display_name || 'Player';
+        const name = t.profiles?.name || 'Player';
         const isYou = t.user_id === currentUserId;
         const initial = name.charAt(0).toUpperCase();
         const color = colors[i % colors.length];
@@ -3443,8 +3443,8 @@ async function loadUserProfile() {
     if (!user) return;
 
     // Get profile from DB
-    const { data: profile } = await sb.from('profiles').select('display_name, squad_name').eq('id', user.id).single();
-    const displayName = profile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Player';
+    const { data: profile } = await sb.from('profiles').select('name, squad_name').eq('id', user.id).single();
+    const displayName = profile?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Player';
     const squadName = profile?.squad_name || 'My XI';
     const initial = displayName.charAt(0).toUpperCase();
 
