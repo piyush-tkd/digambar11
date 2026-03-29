@@ -1497,9 +1497,9 @@ function renderMatchCard(match) {
       </div>
       <div class="match-card-footer">
         <div style="font-size:11px; color:var(--d11-grey);">
-          ${isCompleted ? 'Match ended' : isLive ? '🔴 Match in progress' : 'Entry ₹25'}
+          ${isCompleted ? 'Match ended' : isLive ? '🔴 Match in progress' : match._joined ? '<span style="color:var(--d11-green);font-weight:600;">✓ Team Created</span>' : 'Entry ₹25'}
         </div>
-        <span class="teams-created" style="color:var(--d11-orange);">${isCompleted ? 'Results' : isLive ? 'Watch' : 'Play'}</span>
+        <span class="teams-created" style="color:${match._joined && !isCompleted && !isLive ? 'var(--d11-green)' : 'var(--d11-orange)'};">${isCompleted ? 'Results' : isLive ? 'Watch' : match._joined ? 'View' : 'Play'}</span>
       </div>
     </div>`;
 }
@@ -1617,6 +1617,17 @@ async function loadHomeMatches() {
       return;
     }
 
+    // Fetch user's joined matches to show "Joined" badge on cards
+    const joinedMatchIds = new Set();
+    try {
+      const sb = await D11API.init();
+      const user = await D11API.getUser();
+      if (sb && user) {
+        const { data: myTeams } = await sb.from('user_teams').select('match_id').eq('user_id', user.id);
+        if (myTeams) myTeams.forEach(t => joinedMatchIds.add(t.match_id));
+      }
+    } catch(e) { console.log('Could not fetch joined matches:', e); }
+
     const now = new Date();
     // Derive effective status from date (DB status may be stale/wrong)
     // A match is ~3.5 hours, so "live" = started within last 4 hours
@@ -1627,6 +1638,7 @@ async function loadHomeMatches() {
       if (elapsed < 0) m._effectiveStatus = 'upcoming';           // hasn't started
       else if (elapsed < MATCH_DURATION_MS) m._effectiveStatus = 'live';  // in progress
       else m._effectiveStatus = 'completed';                       // finished
+      m._joined = joinedMatchIds.has(m.id);
     });
     const live = matches.filter(m => m._effectiveStatus === 'live');
     const upcoming = matches.filter(m => m._effectiveStatus === 'upcoming');
