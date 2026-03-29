@@ -382,6 +382,105 @@
       return data;
     },
 
+    // Auto-join (or create) the Friends League for a match when user saves a team
+    async joinFriendsLeague(matchId, userTeamId) {
+      const sb = await initSupabase();
+      if (!currentUser) return { success: false, error: 'Not logged in' };
+
+      // 1. Find existing Friends League contest for this match, or create one
+      let { data: contest } = await sb
+        .from('contests')
+        .select('id, entry_fee, prize_pool, max_entries')
+        .eq('match_id', matchId)
+        .eq('name', 'Friends League')
+        .single();
+
+      if (!contest) {
+        // Create the Friends League contest for this match
+        const { data: newContest, error: createErr } = await sb
+          .from('contests')
+          .insert({
+            match_id: matchId,
+            name: 'Friends League',
+            created_by: currentUser.id,
+            entry_fee: 25,
+            max_entries: 10,
+            prize_pool: 0,
+          })
+          .select()
+          .single();
+        if (createErr) return { success: false, error: 'Failed to create contest: ' + createErr.message };
+        contest = newContest;
+      }
+
+      // 2. Check if user already joined this contest
+      const { data: existing } = await sb
+        .from('contest_entries')
+        .select('id')
+        .eq('contest_id', contest.id)
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+
+      if (existing) {
+        // Already joined — just update the team reference
+        await sb.from('contest_entries').update({ user_team_id: userTeamId }).eq('id', existing.id);
+        return { success: true, alreadyJoined: true };
+      }
+
+      // 3. Check wallet balance
+      const { data: profile } = await sb
+        .from('profiles')
+        .select('wallet_balance')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (!profile) return { success: false, error: 'Profile not found' };
+      if (profile.wallet_balance < contest.entry_fee) {
+        return { success: false, error: 'Insufficient balance. Need ₹' + contest.entry_fee + ', have ₹' + profile.wallet_balance };
+      }
+
+      // 4. Check max entries
+      const { count } = await sb
+        .from('contest_entries')
+        .select('id', { count: 'exact' })
+        .eq('contest_id', contest.id);
+
+      if (count >= contest.max_entries) {
+        return { success: false, error: 'Contest is full (' + contest.max_entries + ' players max)' };
+      }
+
+      // 5. Deduct entry fee
+      const newBalance = profile.wallet_balance - contest.entry_fee;
+      await sb.from('profiles').update({ wallet_balance: newBalance }).eq('id', currentUser.id);
+
+      // 6. Record transaction
+      await sb.from('transactions').insert({
+        user_id: currentUser.id,
+        type: 'entry_fee',
+        amount: -contest.entry_fee,
+        description: 'Friends League entry — Match',
+        contest_id: contest.id,
+        balance_after: newBalance,
+      });
+
+      // 7. Update prize pool
+      await sb.from('contests').update({
+        prize_pool: (contest.prize_pool || 0) + contest.entry_fee,
+      }).eq('id', contest.id);
+
+      // 8. Join contest
+      const { error: joinErr } = await sb
+        .from('contest_entries')
+        .insert({
+          contest_id: contest.id,
+          user_id: currentUser.id,
+          user_team_id: userTeamId,
+        });
+
+      if (joinErr) return { success: false, error: 'Failed to join: ' + joinErr.message };
+      return { success: true, newBalance };
+    },
+
     async joinByInviteCode(inviteCode) {
       const sb = await initSupabase();
       const { data: contest } = await sb
@@ -733,6 +832,7 @@
     // Contests
     createContest: Contests.createContest,
     joinContest: Contests.joinContest,
+    joinFriendsLeague: Contests.joinFriendsLeague,
     getContestsByMatch: Contests.getContestsByMatch,
     joinByInviteCode: Contests.joinByInviteCode,
 

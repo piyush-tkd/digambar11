@@ -2058,7 +2058,29 @@ async function confirmTeam() {
     const result = await D11API.saveTeam(matchId, playerIds, captainId, viceCaptainId, impactPlayerId);
 
     if (result.success) {
-      showToast('Team saved! You can now join contests.');
+      // Auto-join Friends League and deduct ₹25 entry fee
+      if (D11API.joinFriendsLeague) {
+        const joinResult = await D11API.joinFriendsLeague(matchId, result.team_id);
+        if (joinResult.success) {
+          if (joinResult.alreadyJoined) {
+            showToast('Team updated!');
+          } else {
+            showToast('Team saved! ₹25 entry fee deducted.');
+          }
+          // Refresh wallet badge
+          if (D11API.getBalance) {
+            try {
+              const bal = await D11API.getBalance();
+              const badge = document.getElementById('wallet-balance-badge');
+              if (badge) badge.textContent = '₹' + bal;
+            } catch(e) {}
+          }
+        } else {
+          showToast('Team saved but could not join contest: ' + (joinResult.error || ''), 5000);
+        }
+      } else {
+        showToast('Team saved!');
+      }
       showScreen('match-detail');
     } else {
       showToast('Save failed: ' + (result.errors || []).join(', '), 5000);
