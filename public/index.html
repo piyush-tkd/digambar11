@@ -1535,10 +1535,45 @@ function renderMatchCard(match) {
   const scoreA = match.score_a ? '<div style="font-size:10px;color:var(--d11-green);font-weight:600;">' + match.score_a + '</div>' : '';
   const scoreB = match.score_b ? '<div style="font-size:10px;color:var(--d11-green);font-weight:600;">' + match.score_b + '</div>' : '';
 
+  // Check if match opens within 24 hours
+  const startTime = new Date(match.starts_at);
+  const hoursUntilStart = (startTime - new Date()) / 3600000;
+  const isOpen = isLive || isCompleted || match._joined || hoursUntilStart <= 24;
+  const isLocked = !isLive && !isCompleted && !match._joined && hoursUntilStart > 24;
+
   const targetScreen = isLive ? 'live-match' : 'match-detail';
 
+  let footerLeft, footerRight, footerRightColor;
+  if (isCompleted) {
+    footerLeft = 'Match ended';
+    footerRight = 'Results';
+    footerRightColor = 'var(--d11-orange)';
+  } else if (isLive) {
+    footerLeft = '🔴 Match in progress';
+    footerRight = 'Watch';
+    footerRightColor = 'var(--d11-orange)';
+  } else if (match._joined) {
+    footerLeft = '<span style="color:var(--d11-green);font-weight:600;">✓ Team Created</span>';
+    footerRight = 'View';
+    footerRightColor = 'var(--d11-green)';
+  } else if (isLocked) {
+    const d = Math.floor(hoursUntilStart / 24);
+    const h = Math.floor(hoursUntilStart % 24);
+    footerLeft = '<span style="color:var(--d11-grey);">Opens in ' + d + 'd ' + h + 'h</span>';
+    footerRight = '🔒';
+    footerRightColor = 'var(--d11-grey)';
+  } else {
+    footerLeft = 'Entry ₹25';
+    footerRight = 'Play';
+    footerRightColor = 'var(--d11-orange)';
+  }
+
+  const cardOnclick = isLocked
+    ? `showToast('Team creation opens 24 hours before the match')`
+    : `selectMatch('${match.id}', '${targetScreen}')`;
+
   return `
-    <div class="match-card fade-in" onclick="selectMatch('${match.id}', '${targetScreen}')">
+    <div class="match-card fade-in" onclick="${cardOnclick}" style="${isLocked ? 'opacity:0.7;' : ''}">
       <div class="match-card-header">
         <span class="match-league">IPL 2026</span>
         ${statusHtml}
@@ -1564,9 +1599,9 @@ function renderMatchCard(match) {
       </div>
       <div class="match-card-footer">
         <div style="font-size:11px; color:var(--d11-grey);">
-          ${isCompleted ? 'Match ended' : isLive ? '🔴 Match in progress' : match._joined ? '<span style="color:var(--d11-green);font-weight:600;">✓ Team Created</span>' : 'Entry ₹25'}
+          ${footerLeft}
         </div>
-        <span class="teams-created" style="color:${match._joined && !isCompleted && !isLive ? 'var(--d11-green)' : 'var(--d11-orange)'};">${isCompleted ? 'Results' : isLive ? 'Watch' : match._joined ? 'View' : 'Play'}</span>
+        <span class="teams-created" style="color:${footerRightColor};">${footerRight}</span>
       </div>
     </div>`;
 }
@@ -3872,9 +3907,27 @@ async function checkUserTeamStatus(matchId) {
     } else {
       // No team — show Create Team button as before
       statusEl.style.display = 'none';
+
+      // 24-hour lock: hide Create Team if match is >24h away
+      const match24 = window._selectedMatch;
+      if (match24 && match24.starts_at) {
+        const hoursLeft = (new Date(match24.starts_at) - new Date()) / 3600000;
+        if (hoursLeft > 24) {
+          if (createBtn) {
+            const d = Math.floor(hoursLeft / 24);
+            const h = Math.ceil(hoursLeft % 24);
+            createBtn.textContent = `🔒 Opens in ${d}d ${h}h`;
+            createBtn.setAttribute('onclick', "showToast('Team creation opens 24 hours before the match')");
+            createBtn.style.opacity = '0.5';
+          }
+          return;
+        }
+      }
+
       if (createBtn) {
         createBtn.textContent = '+ Create Team';
         createBtn.setAttribute('onclick', "showScreen('team-select')");
+        createBtn.style.opacity = '1';
       }
     }
   } catch (err) {
