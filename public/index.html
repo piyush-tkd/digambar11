@@ -1655,7 +1655,7 @@ function resetTeamSelection() {
   viceCaptainId = null;
   impactPlayerId = null;
   currentRole = 'WK';
-  document.querySelectorAll('.role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === 'WK'));
+  document.querySelectorAll('#screen-team-select .role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === 'WK'));
 }
 
 function getAllPlayers() {
