@@ -1685,6 +1685,23 @@ async function loadMatchDetail() {
 }
 
 let _homeMatchesLoaded = false;
+let _homeRefreshInterval = null;
+
+// Auto-refresh home screen scores every 60s when visible
+function startHomeRefresh() {
+  if (_homeRefreshInterval) return;
+  _homeRefreshInterval = setInterval(() => {
+    const homeScreen = document.getElementById('screen-home');
+    if (homeScreen && homeScreen.style.display !== 'none') {
+      loadHomeMatches();
+    } else {
+      // Home not visible — stop refreshing until next visit
+      clearInterval(_homeRefreshInterval);
+      _homeRefreshInterval = null;
+    }
+  }, 60000);
+}
+
 async function loadHomeMatches() {
   if (typeof D11API === 'undefined') return;
   const container = document.getElementById('matches-container');
@@ -1756,7 +1773,7 @@ function showScreen(id) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.screen === id));
   const createBtn = document.querySelector('.create-team-btn');
   if (createBtn) createBtn.classList.toggle('visible', id === 'match-detail');
-  if (id === 'home') loadHomeMatches();
+  if (id === 'home') { loadHomeMatches(); startHomeRefresh(); }
   if (id === 'match-detail') loadMatchDetail();
   if (id === 'team-select') {
     const isEditing = window._editingTeam;
@@ -2906,6 +2923,11 @@ async function startBackgroundPoller() {
         const fantasy = data.fantasy_scorecards || 0;
         if (updated > 0 || fantasy > 0) {
           console.log(`[AutoPoller] Updated ${updated} matches, ${fantasy} scorecards`);
+          // Refresh home screen if it's currently visible
+          const homeScreen = document.getElementById('screen-home');
+          if (homeScreen && homeScreen.style.display !== 'none') {
+            loadHomeMatches();
+          }
         }
       }
     } catch (e) {
