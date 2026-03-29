@@ -260,10 +260,24 @@
 
       if (teamErr || !team) return { success: false, errors: ['Failed to save team: ' + (teamErr?.message || 'unknown')] };
 
-      // Replace players
-      await sb.from('user_team_players').delete().eq('user_team_id', team.id);
-      const { error: insErr } = await sb.from('user_team_players').insert(playerIds.map(pid => ({ user_team_id: team.id, player_id: pid })));
-      if (insErr) return { success: false, errors: ['Failed to save players: ' + insErr.message] };
+      // Replace players — deduplicate IDs first, then delete old rows before inserting
+      const uniquePlayerIds = [...new Set(playerIds)];
+      const { error: delErr } = await sb.from('user_team_players').delete().eq('user_team_id', team.id);
+      if (delErr) {
+        console.warn('Failed to delete old players, trying upsert approach:', delErr.message);
+        // Fallback: upsert each player individually (handles RLS issues)
+        for (const pid of uniquePlayerIds) {
+          await sb.from('user_team_players').upsert(
+            { user_team_id: team.id, player_id: pid },
+            { onConflict: 'user_team_id,player_id' }
+          );
+        }
+      } else {
+        const { error: insErr } = await sb.from('user_team_players').insert(
+          uniquePlayerIds.map(pid => ({ user_team_id: team.id, player_id: pid }))
+        );
+        if (insErr) return { success: false, errors: ['Failed to save players: ' + insErr.message] };
+      }
 
       console.log('Team saved via direct fallback');
       return { success: true, team_id: team.id, total_credits: totalCredits, composition: rc };
