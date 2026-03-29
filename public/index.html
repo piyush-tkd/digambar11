@@ -198,7 +198,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .contest-spots { display: flex; justify-content: space-between; font-size: 10px; color: var(--d11-grey); margin-top: 4px; padding: 0 2px; }
 
 /* Create Team Button */
-.create-team-btn { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--d11-green) 0%, #219150 100%); color: white; border: none; padding: 14px 40px; border-radius: 30px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(39,174,96,0.4); z-index: 10; display: none; letter-spacing: 0.3px; }
+.create-team-btn { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--d11-green) 0%, #219150 100%); color: white; border: none; padding: 14px 40px; border-radius: 30px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(39,174,96,0.4); z-index: 10; display: none; letter-spacing: 0.3px; }
 .create-team-btn:active { transform: translateX(-50%) scale(0.95); }
 .create-team-btn.visible { display: block; }
 
@@ -2916,7 +2916,32 @@ function switchMatchTab(idx) {
   if (myteamTab) myteamTab.style.display = idx === 1 ? '' : 'none';
 
   if (idx === 1) renderMyTeamTab();
-  if (idx === 2) showScreen('live-match');
+  if (idx === 2) {
+    // Only go to live-match if match has actually started
+    const match = window._selectedMatch;
+    if (match && new Date(match.starts_at) <= new Date()) {
+      showScreen('live-match');
+    } else {
+      // Show placeholder for upcoming match
+      const friendsTab = document.getElementById('md-tab-friends');
+      const myteamTab = document.getElementById('md-tab-myteam');
+      if (friendsTab) friendsTab.style.display = 'none';
+      if (myteamTab) myteamTab.style.display = 'none';
+      let lbPanel = document.getElementById('md-tab-leaderboard');
+      if (!lbPanel) {
+        lbPanel = document.createElement('div');
+        lbPanel.id = 'md-tab-leaderboard';
+        const parent = friendsTab?.parentElement || myteamTab?.parentElement;
+        if (parent) parent.appendChild(lbPanel);
+      }
+      lbPanel.style.display = '';
+      lbPanel.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--d11-grey);"><div style="font-size:40px;margin-bottom:12px;">🏆</div><div style="font-size:14px;font-weight:600;margin-bottom:4px;">Leaderboard</div><div style="font-size:12px;">Available once the match begins</div></div>';
+    }
+  } else {
+    // Hide leaderboard placeholder when switching away
+    const lbPanel = document.getElementById('md-tab-leaderboard');
+    if (lbPanel) lbPanel.style.display = 'none';
+  }
 }
 
 // ====== MY TEAM TAB RENDERING ======
@@ -3169,10 +3194,24 @@ async function loadMyMatches() {
       const codeB = getTeamCode(match.team_b);
       const start = new Date(match.starts_at);
       const now = new Date();
-      const isLive = match.status === 'live' || match.status === '1st Innings' || match.status === '2nd Innings';
-      const isCompleted = match.status === 'completed' || match.status === 'Finished';
-      const timeStr = isLive ? '● LIVE' : isCompleted ? (match.result || 'Completed') : start.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-      const timeColor = isLive ? 'var(--d11-red)' : isCompleted ? 'var(--d11-green)' : 'var(--d11-grey)';
+      // Compute effective status from time (don't rely on DB status alone)
+      const elapsed = now - start;
+      const MATCH_DUR = 4 * 3600000; // ~4 hours
+      const dbLive = match.status === 'live' || match.status === '1st Innings' || match.status === '2nd Innings';
+      const isLive = dbLive || (elapsed >= 0 && elapsed < MATCH_DUR && match.status !== 'completed' && match.status !== 'Finished');
+      const isCompleted = match.status === 'completed' || match.status === 'Finished' || elapsed >= MATCH_DUR;
+      const isUpcoming = !isLive && !isCompleted;
+      let timeStr, timeColor;
+      if (isLive) { timeStr = '● LIVE'; timeColor = 'var(--d11-red)'; }
+      else if (isCompleted) { timeStr = match.result || 'Completed'; timeColor = 'var(--d11-green)'; }
+      else {
+        const diff = start - now;
+        const d = Math.floor(diff / 86400000);
+        const h = Math.floor((diff % 86400000) / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        timeStr = d > 0 ? start.toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : h + 'h ' + m + 'm';
+        timeColor = 'var(--d11-orange)';
+      }
       return `<div class="my-team-card fade-in" style="cursor:pointer;" onclick="selectMatch('${t.match_id}', '${isLive ? 'live-match' : 'match-detail'}')">
         <div class="my-team-header">
           <div>
