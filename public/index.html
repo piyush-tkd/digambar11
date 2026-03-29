@@ -1980,9 +1980,29 @@ function renderPreview() {
   field.innerHTML = html;
 }
 
-function confirmTeam() {
-  alert('Team saved! You can now join contests.');
-  showScreen('match-detail');
+async function confirmTeam() {
+  const matchId = window._selectedMatchId;
+  if (!matchId || !captainId || !viceCaptainId || !impactPlayerId) return;
+
+  const btn = document.querySelector('#screen-preview .next-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'SAVING...'; }
+
+  try {
+    const playerIds = selectedPlayers.map(p => p.id);
+    const result = await D11API.saveTeam(matchId, playerIds, captainId, viceCaptainId, impactPlayerId);
+
+    if (result.success) {
+      showToast('Team saved! You can now join contests.');
+      showScreen('match-detail');
+    } else {
+      showToast('Save failed: ' + (result.errors || []).join(', '), 5000);
+    }
+  } catch (err) {
+    console.error('confirmTeam error:', err);
+    showToast('Error saving team. Please try again.', 5000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'CONTINUE →'; }
+  }
 }
 
 // ====== LEADERBOARD ======
