@@ -1325,6 +1325,26 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div id="admin-score-result-msg" style="font-size:12px;color:var(--d11-grey);margin-top:8px;"></div>
       </div>
 
+      <!-- Auto Live Score Fetcher (CricAPI) -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">⚡ Auto Live Scores</div>
+        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Fetches live IPL scores from CricAPI every 2 min and auto-updates the DB. Free tier: 100 calls/day.</div>
+        <div style="margin-bottom:10px;">
+          <input id="admin-cricapi-key" type="password" placeholder="CricAPI Key (from cricketdata.org)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--d11-border);background:var(--d11-surface);color:var(--d11-white);font-size:13px;box-sizing:border-box;">
+          <div style="font-size:10px;color:var(--d11-grey);margin-top:4px;">Get free key at <a href="https://cricketdata.org" target="_blank" style="color:var(--d11-blue);">cricketdata.org</a> → Sign Up → Dashboard → API Key</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button id="admin-autoscore-start" onclick="startAutoScoring()" style="flex:1;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--d11-green),#1B8A4A);color:white;font-size:14px;font-weight:700;cursor:pointer;">
+            ▶ Start Auto Scoring
+          </button>
+          <button id="admin-autoscore-stop" onclick="stopAutoScoring()" style="flex:1;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--d11-red),#C41420);color:white;font-size:14px;font-weight:700;cursor:pointer;display:none;">
+            ⏹ Stop
+          </button>
+        </div>
+        <div id="admin-autoscore-status" style="font-size:12px;color:var(--d11-grey);margin-bottom:6px;">Not running</div>
+        <div id="admin-autoscore-log" style="font-size:11px;color:var(--d11-grey);max-height:180px;overflow-y:auto;font-family:monospace;white-space:pre-wrap;background:var(--d11-surface);border-radius:8px;padding:8px;"></div>
+      </div>
+
       <!-- Live Matches Quick Start -->
       <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📋 Live/Upcoming Matches</div>
@@ -2284,16 +2304,32 @@ async function loadMatchLeaderboard(matchId) {
       const myEntry = entries.find(e => e.isYou);
       if (myEntry) myName = myEntry.name;
     }
-    // Populate friendSquads from entries (without player details, just summary)
-    entries.forEach(e => {
-      if (!friendSquads[e.name]) {
-        friendSquads[e.name] = {
-          squad: e.team,
-          pts: e.pts,
-          rank: e.rank,
-          players: [], // player details loaded separately from live_scores
+
+    // Populate friendSquads WITH actual player data from user_team_players
+    friendsLeague.contest_entries.forEach(ce => {
+      const name = ce.profiles?.name || ce.profiles?.squad_name || 'Player';
+      const squadName = ce.profiles?.squad_name || '—';
+      const ut = ce.user_teams;
+      const captainId = ut?.captain_id;
+      const viceCaptainId = ut?.vice_captain_id;
+      const teamPlayers = (ut?.user_team_players || []).map(utp => {
+        const p = utp.players || {};
+        return {
+          name: p.name || 'Unknown',
+          team: p.team || '',
+          role: p.role || '',
+          pts: 0, // will be updated by loadLivePlayerScores if live_scores exist
+          status: 'waiting',
+          cap: utp.player_id === captainId ? 'C' : utp.player_id === viceCaptainId ? 'VC' : null,
         };
-      }
+      });
+      const entry = entries.find(e => e.name === name);
+      friendSquads[name] = {
+        squad: squadName,
+        pts: entry?.pts || ut?.total_points || 0,
+        rank: entry?.rank || 0,
+        players: teamPlayers,
+      };
     });
   } catch (err) {
     console.warn('Failed to load leaderboard:', err);
@@ -2457,30 +2493,17 @@ async function loadLivePlayerScores(matchId) {
   try {
     const scores = await D11API.getLiveScores(matchId);
     if (!scores || scores.length === 0) {
-      // No live_scores rows yet — try to build scorecard from user teams
+      // No live_scores rows yet — friendSquads already has players from loadMatchLeaderboard
       renderLiveScorecard();
+      renderAllSquads(); // re-render with player data from user_teams
       return;
     }
 
-    // Build a friendSquads-compatible structure from live_scores + user teams
-    // First set myName from profile
-    if (!myName && typeof D11API !== 'undefined') {
-      try {
-        const user = await D11API.getUser();
-        if (user) myName = user.squadName || user.name || '';
-      } catch(e) {}
-    }
-
-    // Get my team for this match
-    const myTeam = await D11API.getMyTeam(matchId);
-
-    // Build player scores map from live_scores table
+    // Build player scores map from live_scores table (keyed by player name for matching)
     const playerScoresMap = {};
     scores.forEach(s => {
-      playerScoresMap[s.player_id] = {
-        name: s.players?.name || 'Unknown',
-        team: s.players?.team || '',
-        role: s.players?.role || '',
+      const pName = s.players?.name || 'Unknown';
+      playerScoresMap[pName] = {
         pts: s.fantasy_pts || 0,
         status: s.status || 'waiting',
         runs: s.runs || 0,
@@ -2489,47 +2512,23 @@ async function loadLivePlayerScores(matchId) {
       };
     });
 
-    // Build my squad in friendSquads if I have a team
-    if (myTeam && myName) {
-      const myPlayers = (myTeam.user_team_players || []).map(utp => {
-        const p = utp.players || {};
-        const liveData = playerScoresMap[utp.player_id] || {};
-        return {
-          name: p.name || liveData.name || 'Unknown',
-          team: p.team || liveData.team || '',
-          role: p.role || liveData.role || '',
-          pts: liveData.pts || 0,
-          status: liveData.status || 'waiting',
-          cap: utp.player_id === myTeam.captain_id ? 'C' : utp.player_id === myTeam.vice_captain_id ? 'VC' : null,
-        };
-      });
-      const totalPts = myPlayers.reduce((sum, p) => {
+    // Merge live points into every squad's players in friendSquads
+    Object.values(friendSquads).forEach(sq => {
+      let totalPts = 0;
+      (sq.players || []).forEach(p => {
+        const liveData = playerScoresMap[p.name];
+        if (liveData) {
+          p.pts = liveData.pts || 0;
+          p.status = liveData.status || 'waiting';
+        }
         const mult = p.cap === 'C' ? 2 : p.cap === 'VC' ? 1.5 : 1;
-        return sum + p.pts * mult;
-      }, 0);
-
-      friendSquads[myName] = {
-        squad: window.userSquadName || myName,
-        pts: Math.round(totalPts * 10) / 10,
-        rank: myTeam.rank || '—',
-        players: myPlayers,
-      };
-    }
-
-    // Also add all match players to scorecard (even those not in user's team)
-    // This gives a full scorecard view
-    if (!friendSquads['All Players']) {
-      const allPlayers = scores.map(s => ({
-        name: s.players?.name || 'Unknown',
-        team: s.players?.team || '',
-        role: s.players?.role || '',
-        pts: s.fantasy_pts || 0,
-        status: s.status || 'waiting',
-      }));
-      // Don't add as a squad, just make sure scorecard renders all players
-    }
+        totalPts += (p.pts || 0) * mult;
+      });
+      sq.pts = Math.round(totalPts * 10) / 10;
+    });
 
     renderLiveScorecard();
+    renderAllSquads(); // re-render with updated points
   } catch(e) {
     console.warn('Failed to load live player scores:', e);
     renderLiveScorecard();
@@ -2677,6 +2676,9 @@ async function loadAdminPanel() {
 
   // Load score updater match selector
   loadScoreMatchSelector();
+
+  // Restore saved CricAPI key
+  restoreCricApiKey();
 }
 
 async function adminSyncMatches() {
@@ -2782,6 +2784,234 @@ async function adminUpdateScore() {
     adminLog('Score update error: ' + err);
   }
   btn.disabled = false; btn.textContent = 'Update Score';
+}
+
+// ====== AUTO LIVE SCORE FETCHER (CricAPI) ======
+const TEAM_ALIASES = {
+  CSK: ['chennai super kings', 'chennai', 'csk', 'che'],
+  MI:  ['mumbai indians', 'mumbai', 'mi', 'mum'],
+  RCB: ['royal challengers', 'royal challengers bengaluru', 'royal challengers bangalore', 'bangalore', 'bengaluru', 'rcb', 'ban'],
+  KKR: ['kolkata knight riders', 'kolkata', 'kkr', 'kol'],
+  DC:  ['delhi capitals', 'delhi', 'dc', 'del'],
+  SRH: ['sunrisers hyderabad', 'hyderabad', 'srh', 'hyd', 'sunrisers'],
+  RR:  ['rajasthan royals', 'rajasthan', 'rr', 'raj'],
+  PBKS:['punjab kings', 'punjab', 'pbks', 'pun', 'pk'],
+  GT:  ['gujarat titans', 'gujarat', 'gt', 'guj'],
+  LSG: ['lucknow super giants', 'lucknow', 'lsg', 'luc'],
+};
+
+function resolveTeamCode(name) {
+  if (!name) return null;
+  const upper = name.toUpperCase().trim();
+  if (TEAM_ALIASES[upper]) return upper;
+  const lower = name.toLowerCase().trim();
+  for (const [code, aliases] of Object.entries(TEAM_ALIASES)) {
+    for (const alias of aliases) {
+      if (lower === alias || lower.includes(alias) || alias.includes(lower)) return code;
+    }
+  }
+  return null;
+}
+
+function mapApiStatus(raw) {
+  const s = (raw || '').toLowerCase();
+  if (s.includes('won') || s.includes('result') || s.includes('completed') || s === 'match over') return 'completed';
+  if (s.includes('live') || s.includes('break') || s.includes('innings') || s.includes('timeout') || s.includes('in progress')) return 'live';
+  if (s.includes('abandon') || s.includes('no result')) return 'abandoned';
+  return 'live'; // default to live if we can't determine
+}
+
+let _autoScoreInterval = null;
+let _autoScoreCallCount = 0;
+
+function autoScoreLog(msg) {
+  const log = document.getElementById('admin-autoscore-log');
+  if (!log) return;
+  const ts = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  log.textContent = `[${ts}] ${msg}\n` + log.textContent;
+  // Keep log manageable
+  if (log.textContent.length > 5000) log.textContent = log.textContent.slice(0, 3000);
+}
+
+function startAutoScoring() {
+  const apiKey = document.getElementById('admin-cricapi-key')?.value?.trim();
+  if (!apiKey) {
+    showToast('Enter your CricAPI key first');
+    return;
+  }
+
+  // Save key to localStorage for convenience
+  try { localStorage.setItem('d11_cricapi_key', apiKey); } catch(e) {}
+
+  // UI state
+  document.getElementById('admin-autoscore-start').style.display = 'none';
+  document.getElementById('admin-autoscore-stop').style.display = 'block';
+  document.getElementById('admin-autoscore-status').innerHTML = '<span style="color:var(--d11-green);">● Running</span> — polling every 2 min';
+
+  _autoScoreCallCount = 0;
+  autoScoreLog('Auto-scoring started');
+
+  // Run immediately, then every 2 minutes
+  fetchAndUpdateScores(apiKey);
+  _autoScoreInterval = setInterval(() => fetchAndUpdateScores(apiKey), 2 * 60 * 1000);
+}
+
+function stopAutoScoring() {
+  if (_autoScoreInterval) {
+    clearInterval(_autoScoreInterval);
+    _autoScoreInterval = null;
+  }
+  document.getElementById('admin-autoscore-start').style.display = 'block';
+  document.getElementById('admin-autoscore-stop').style.display = 'none';
+  document.getElementById('admin-autoscore-status').innerHTML = 'Stopped — ' + _autoScoreCallCount + ' API calls used this session';
+  autoScoreLog('Auto-scoring stopped');
+}
+
+async function fetchAndUpdateScores(apiKey) {
+  if (typeof D11API === 'undefined') return;
+
+  try {
+    _autoScoreCallCount++;
+    autoScoreLog(`Fetching scores... (call #${_autoScoreCallCount})`);
+    document.getElementById('admin-autoscore-status').innerHTML =
+      '<span style="color:var(--d11-green);">● Running</span> — fetching... (call #' + _autoScoreCallCount + '/100 daily)';
+
+    // 1. Fetch current matches from CricAPI
+    const url = `https://api.cricapi.com/v1/currentMatches?apikey=${apiKey}&offset=0`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.status === 'failure') {
+      autoScoreLog('API error: ' + (data.reason || 'Unknown'));
+      document.getElementById('admin-autoscore-status').innerHTML =
+        '<span style="color:var(--d11-red);">● Error</span> — ' + (data.reason || 'API failure');
+      return;
+    }
+
+    const apiMatches = data.data || [];
+    autoScoreLog(`Got ${apiMatches.length} matches from CricAPI`);
+
+    // 2. Filter for IPL matches only
+    const iplMatches = apiMatches.filter(m => {
+      const series = (m.series || m.name || '').toLowerCase();
+      return series.includes('ipl') || series.includes('indian premier league');
+    });
+
+    if (iplMatches.length === 0) {
+      autoScoreLog('No IPL matches found in API response');
+      document.getElementById('admin-autoscore-status').innerHTML =
+        '<span style="color:var(--d11-orange);">● No IPL matches live</span> — call #' + _autoScoreCallCount;
+      return;
+    }
+
+    autoScoreLog(`Found ${iplMatches.length} IPL match(es)`);
+
+    // 3. Get our DB matches to match against
+    const sb = await D11API.init();
+    const { data: dbMatches } = await sb.from('matches')
+      .select('id, team_a, team_b, status, score_a, score_b')
+      .in('status', ['live', 'upcoming']);
+
+    if (!dbMatches || dbMatches.length === 0) {
+      autoScoreLog('No live/upcoming matches in DB');
+      return;
+    }
+
+    // 4. Match API data to DB and update
+    let updatedCount = 0;
+    for (const m of iplMatches) {
+      // Resolve team codes from API
+      const t1 = m.teamInfo?.[0]?.shortname || m.teams?.[0] || '';
+      const t2 = m.teamInfo?.[1]?.shortname || m.teams?.[1] || '';
+      const code1 = resolveTeamCode(t1);
+      const code2 = resolveTeamCode(t2);
+
+      if (!code1 || !code2) {
+        autoScoreLog(`Could not resolve teams: ${t1} / ${t2}`);
+        continue;
+      }
+
+      // Find matching DB match
+      const dbMatch = dbMatches.find(dm =>
+        (dm.team_a === code1 && dm.team_b === code2) ||
+        (dm.team_a === code2 && dm.team_b === code1)
+      );
+
+      if (!dbMatch) {
+        autoScoreLog(`No DB match for ${code1} vs ${code2}`);
+        continue;
+      }
+
+      // Parse scores from API response
+      // CricAPI score format: [{inning: "Team Name Inning 1", r: 156, w: 4, o: 18.2}, ...]
+      const scoreMap = {};
+      if (Array.isArray(m.score) && m.score.length > 0) {
+        for (const s of m.score) {
+          const inningStr = (s.inning || '').toLowerCase();
+          // Try to match team from inning string
+          for (const [code, aliases] of Object.entries(TEAM_ALIASES)) {
+            for (const alias of aliases) {
+              if (inningStr.includes(alias)) {
+                // Use latest innings data (overwrite if 2nd innings)
+                scoreMap[code] = `${s.r}/${s.w} (${s.o})`;
+                break;
+              }
+            }
+            if (scoreMap[code]) break;
+          }
+        }
+      }
+
+      const scoreA = scoreMap[dbMatch.team_a] || 'Yet to bat';
+      const scoreB = scoreMap[dbMatch.team_b] || 'Yet to bat';
+      const status = mapApiStatus(m.status || '');
+      const result = m.status || null;
+
+      // Check if anything actually changed
+      if (dbMatch.score_a === scoreA && dbMatch.score_b === scoreB && dbMatch.status === status) {
+        autoScoreLog(`${code1} vs ${code2}: No change`);
+        continue;
+      }
+
+      // Update via D11API (uses admin RLS policy)
+      const updateResult = await D11API.updateMatchScore(dbMatch.id, {
+        status,
+        score_a: scoreA,
+        score_b: scoreB,
+        result: result,
+      });
+
+      if (updateResult.success) {
+        updatedCount++;
+        autoScoreLog(`✓ ${dbMatch.team_a} vs ${dbMatch.team_b}: ${scoreA} / ${scoreB} [${status}]`);
+      } else {
+        autoScoreLog(`✗ ${dbMatch.team_a} vs ${dbMatch.team_b}: ${updateResult.error}`);
+      }
+    }
+
+    autoScoreLog(`Done — ${updatedCount} match(es) updated`);
+    document.getElementById('admin-autoscore-status').innerHTML =
+      '<span style="color:var(--d11-green);">● Running</span> — ' + updatedCount + ' updated, call #' + _autoScoreCallCount + '/100 daily. Next in 2 min';
+
+    // Refresh the manual score updater dropdown too
+    loadScoreMatchSelector();
+
+  } catch (err) {
+    autoScoreLog('Error: ' + err);
+    document.getElementById('admin-autoscore-status').innerHTML =
+      '<span style="color:var(--d11-red);">● Error</span> — ' + err;
+  }
+}
+
+// Restore saved API key on admin panel load
+function restoreCricApiKey() {
+  try {
+    const saved = localStorage.getItem('d11_cricapi_key');
+    if (saved) {
+      const input = document.getElementById('admin-cricapi-key');
+      if (input) input.value = saved;
+    }
+  } catch(e) {}
 }
 
 // Triple-tap D11 logo to access admin (hidden entry point)
@@ -2926,13 +3156,13 @@ function renderCompare() {
   const result = document.getElementById('compare-result');
   const mine = friendSquads[myName];
   const theirs = friendSquads[compareWith];
-  if (!theirs) return;
+  if (!theirs || !mine) return;
 
-  const myNames = new Set(mine.players.map(p => p.name));
-  const theirNames = new Set(theirs.players.map(p => p.name));
-  const common = mine.players.filter(p => theirNames.has(p.name));
-  const onlyMine = mine.players.filter(p => !theirNames.has(p.name));
-  const onlyTheirs = theirs.players.filter(p => !myNames.has(p.name));
+  const myNames = new Set((mine.players || []).map(p => p.name));
+  const theirNames = new Set((theirs.players || []).map(p => p.name));
+  const common = (mine.players || []).filter(p => theirNames.has(p.name));
+  const onlyMine = (mine.players || []).filter(p => !theirNames.has(p.name));
+  const onlyTheirs = (theirs.players || []).filter(p => !myNames.has(p.name));
 
   const ptsDiff = fmtPts(mine.pts - theirs.pts);
   const diffColor = ptsDiff > 0 ? 'var(--d11-green)' : ptsDiff < 0 ? 'var(--d11-red)' : 'var(--d11-grey)';

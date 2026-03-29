@@ -84,7 +84,6 @@ async function updateMatch(dbId, scoreA, scoreB, status, result, source) {
       score_b: scoreB,
       status,
       result,
-      status_note: result,
       updated_at: new Date().toISOString(),
     })
     .eq('id', dbId);

@@ -389,7 +389,16 @@
             rank,
             winnings,
             profiles:user_id (name, squad_name),
-            user_teams:user_team_id (total_points)
+            user_teams:user_team_id (
+              id,
+              total_points,
+              captain_id,
+              vice_captain_id,
+              user_team_players (
+                player_id,
+                players:player_id (id, name, team, role)
+              )
+            )
           )
         `)
         .eq('match_id', matchId)

@@ -1,6 +1,7 @@
 {
   "outputDirectory": "public",
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -21,6 +22,12 @@
         { "key": "CDN-Cache-Control", "value": "no-store" },
         { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/live-score",
+      "schedule": "0 10 * * *"
     }
   ]
 }
