@@ -1792,6 +1792,7 @@ function showScreen(id) {
   }
   if (id === 'live-match') loadLiveMatchData();
   if (id === 'my-matches') loadMyMatches();
+  if (id === 'leaderboard') loadLeaderboardScreen();
   if (id === 'admin') loadAdminPanel();
   if (id === 'profile') {
     const adminItem = document.getElementById('admin-menu-item');
@@ -2202,6 +2203,60 @@ function switchLBTab(tab) {
   tabs[1].classList.toggle('active', tab === 'league');
   document.getElementById('lb-match-tab').style.display = tab === 'match' ? 'flex' : 'none';
   document.getElementById('lb-league-tab').style.display = tab === 'league' ? 'flex' : 'none';
+}
+
+// Auto-load leaderboard when Rankings tab is opened from bottom nav
+async function loadLeaderboardScreen() {
+  if (typeof D11API === 'undefined') return;
+  try {
+    // If a match is already selected, use that
+    if (window._selectedMatchId && window._selectedMatch) {
+      updateLBHeader(window._selectedMatch);
+      await loadMatchLeaderboard(window._selectedMatchId);
+      return;
+    }
+
+    // Otherwise find the best match to show: live > most recent completed > next upcoming
+    const matches = await D11API.getMatches();
+    if (!matches || matches.length === 0) return;
+
+    const live = matches.find(m => m.status === 'live');
+    const completed = matches.filter(m => m.status === 'completed').sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+    const upcoming = matches.filter(m => m.status === 'upcoming').sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+
+    const bestMatch = live || completed[0] || upcoming[0];
+    if (bestMatch) {
+      window._selectedMatchId = bestMatch.id;
+      window._selectedMatch = bestMatch;
+      updateLBHeader(bestMatch);
+      await loadMatchLeaderboard(bestMatch.id);
+    }
+  } catch (e) {
+    console.warn('loadLeaderboardScreen error:', e);
+  }
+}
+
+function updateLBHeader(match) {
+  if (!match) return;
+  const teamA = document.getElementById('lb-team-a');
+  const teamB = document.getElementById('lb-team-b');
+  const status = document.getElementById('lb-match-status');
+  if (teamA) teamA.textContent = match.team_a || '—';
+  if (teamB) teamB.textContent = match.team_b || '—';
+
+  if (match.status === 'live') {
+    const parts = [];
+    if (match.score_a) parts.push(match.team_a + ' ' + match.score_a);
+    if (match.score_b) parts.push(match.team_b + ' ' + match.score_b);
+    status.innerHTML = parts.length > 0
+      ? '<span style="color:var(--d11-green);font-weight:700;">' + parts.join(' | ') + '</span>'
+      : '<span style="color:var(--d11-orange);">🔴 Match in progress</span>';
+  } else if (match.status === 'completed') {
+    status.textContent = match.result || 'Completed';
+  } else {
+    const d = new Date(match.starts_at);
+    status.textContent = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) + ' • ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }
 }
 
 function renderLeaderboard(data) {
