@@ -1,5 +1,6 @@
 // Digambar 11 Service Worker — PWA offline support
-const CACHE_NAME = 'digambar11-v7';
+// v8: Network-first for ALL app files to prevent stale data
+const CACHE_NAME = 'digambar11-v8';
 const ASSETS = [
   '/',
   '/index.html',
@@ -25,8 +26,16 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network-first for HTML/documents so users always get fresh content
-  if (event.request.destination === 'document' || event.request.mode === 'navigate') {
+  const url = new URL(event.request.url);
+
+  // Skip API calls — always go to network
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) {
+    return;
+  }
+
+  // Network-first for ALL same-origin requests (HTML, JS, etc.)
+  // This prevents stale index.html and supabase-client.js
+  if (url.origin === self.location.origin) {
     event.respondWith(
       fetch(event.request).then((response) => {
         if (response.ok) {
@@ -34,12 +43,12 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => caches.match('/index.html'))
+      }).catch(() => caches.match(event.request).then(c => c || caches.match('/index.html')))
     );
     return;
   }
 
-  // Cache-first for other assets (JS, CSS, fonts, images)
+  // Cache-first for external assets only (fonts, CDN)
   event.respondWith(
     caches.match(event.request).then((cached) => {
       return cached || fetch(event.request).then((response) => {

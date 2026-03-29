@@ -438,14 +438,77 @@ async function processFantasyPoints(
   }
 
   // Get DB players for this match
-  const { data: dbPlayers } = await supabase
+  let { data: dbPlayers } = await supabase
     .from('match_players')
     .select('player_id, players:player_id (id, name, team, role)')
     .eq('match_id', dbMatchId);
 
+  // ── Auto-populate match_players if empty ──────────────────
   if (!dbPlayers || dbPlayers.length === 0) {
-    console.log(`[Fantasy] No match_players found for match ${dbMatchId}`);
-    return { match_id: dbMatchId, players: 0, error: 'No match_players' };
+    console.log(`[Fantasy] No match_players found — auto-populating from Sportmonks lineup/scorecard...`);
+
+    // Get all API player names from lineup + batting + bowling
+    const apiPlayerNames = new Set();
+    for (const p of lineupData) {
+      const name = p.fullname || `${p.firstname || ''} ${p.lastname || ''}`.trim();
+      if (name) apiPlayerNames.add(name);
+    }
+    for (const [, ps] of Object.entries(playerStats)) {
+      if (ps.name) apiPlayerNames.add(ps.name);
+    }
+
+    console.log(`[Fantasy] API players to match: ${apiPlayerNames.size} names`);
+
+    // Get all players from both teams in DB
+    const { data: allTeamPlayers } = await supabase
+      .from('players')
+      .select('id, name, team, role')
+      .in('team', [code1, code2]);
+
+    if (allTeamPlayers && allTeamPlayers.length > 0) {
+      const inserts = [];
+      const matched = new Set();
+
+      // Match each API player name to a DB player
+      for (const apiName of apiPlayerNames) {
+        const dbPlayer = matchPlayerByName(
+          allTeamPlayers.map(p => ({ players: p })),
+          apiName
+        );
+        if (dbPlayer && !matched.has(dbPlayer.players.id)) {
+          matched.add(dbPlayer.players.id);
+          inserts.push({
+            match_id: dbMatchId,
+            player_id: dbPlayer.players.id,
+            playing: true,
+          });
+        }
+      }
+
+      console.log(`[Fantasy] Auto-matched ${inserts.length} players for match_players`);
+
+      if (inserts.length > 0) {
+        const { error: insertErr } = await supabase
+          .from('match_players')
+          .upsert(inserts, { onConflict: 'match_id,player_id' });
+        if (insertErr) {
+          console.error(`[Fantasy] match_players insert error:`, insertErr.message);
+        } else {
+          console.log(`[Fantasy] ✓ Auto-inserted ${inserts.length} match_players rows`);
+          // Re-fetch match_players after insert
+          const refetch = await supabase
+            .from('match_players')
+            .select('player_id, players:player_id (id, name, team, role)')
+            .eq('match_id', dbMatchId);
+          dbPlayers = refetch.data || [];
+        }
+      }
+    }
+
+    if (!dbPlayers || dbPlayers.length === 0) {
+      console.log(`[Fantasy] Still no match_players after auto-populate attempt`);
+      return { match_id: dbMatchId, players: 0, error: 'No match_players and auto-populate failed' };
+    }
   }
 
   console.log(`[Fantasy] ${Object.keys(playerStats).length} API players, ${dbPlayers.length} DB players`);

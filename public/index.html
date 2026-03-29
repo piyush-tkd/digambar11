@@ -987,6 +987,23 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
       </div>
       <div id="compare-result"></div>
     </div>
+
+    <!-- Player Scorecard Breakdown Modal -->
+    <div id="player-scorecard-modal" style="display:none;position:absolute;inset:0;z-index:200;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);overflow-y:auto;" onclick="if(event.target===this)closePlayerScorecard()">
+      <div style="margin:40px 12px 20px;background:var(--d11-card);border-radius:16px;overflow:hidden;max-width:420px;margin-left:auto;margin-right:auto;">
+        <!-- Modal Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--d11-border);background:rgba(255,255,255,0.02);">
+          <div style="font-size:14px;font-weight:800;">Player Scorecard</div>
+          <div style="cursor:pointer;padding:4px;" onclick="closePlayerScorecard()">
+            <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:var(--d11-grey);"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </div>
+        </div>
+        <!-- Modal Content (dynamic) -->
+        <div id="player-scorecard-content" style="padding:0;">
+          <div style="text-align:center;padding:40px;color:var(--d11-grey);font-size:13px;">Loading...</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ===== SCREEN: MY MATCHES ===== -->
@@ -3038,15 +3055,18 @@ function renderLiveScorecard() {
     if (isYours && cap === 'C') displayPts = fmtPts(p.pts * 2);
     else if (isYours && cap === 'VC') displayPts = fmtPts(p.pts * 1.5);
 
-    return `<div class="live-player-row${rowClass}">
+    return `<div class="live-player-row${rowClass}" style="cursor:pointer;" onclick="showPlayerScorecard('${p.name.replace(/'/g, "\\'")}', '${p.team}', '${p.role}')">
       <div class="live-dot ${statusDot}"></div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}${capBadge}</div>
         <div style="font-size:10px;color:var(--d11-grey);display:flex;align-items:center;gap:4px;">${p.team} • ${p.role}<span style="margin-left:4px;display:flex;gap:2px;">${pickerDots}</span></div>
       </div>
-      <div style="text-align:right;">
-        <div style="font-size:14px;font-weight:800;">${displayPts}</div>
-        <div style="font-size:9px;color:var(--d11-grey);">${fmtPts(p.pts)} base${cap ? ' × ' + (cap==='C'?'2':'1.5') : ''}</div>
+      <div style="text-align:right;display:flex;align-items:center;gap:6px;">
+        <div>
+          <div style="font-size:14px;font-weight:800;">${displayPts}</div>
+          <div style="font-size:9px;color:var(--d11-grey);">${fmtPts(p.pts)} base${cap ? ' × ' + (cap==='C'?'2':'1.5') : ''}</div>
+        </div>
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:var(--d11-grey);flex-shrink:0;"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
       </div>
     </div>`;
   }).join('');
@@ -3067,11 +3087,12 @@ function renderAllSquads() {
       const capTag = p.cap === 'C' ? '<span style="background:var(--d11-gold);color:var(--d11-dark);font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px;margin-left:4px;">C</span>' :
                     p.cap === 'VC' ? '<span style="background:var(--d11-blue);color:white;font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px;margin-left:4px;">VC</span>' : '';
       const dotClass = p.status === 'batting' ? 'batting' : p.status === 'bowling' ? 'bowling' : p.status === 'out' ? 'out' : 'waiting';
-      return `<div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--d11-border);font-size:11px;">
+      return `<div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--d11-border);font-size:11px;cursor:pointer;" onclick="showPlayerScorecard('${p.name.replace(/'/g, "\\'")}', '${p.team}', '${p.role}')">
         <div class="live-dot ${dotClass}"></div>
         <div style="flex:1;font-weight:600;">${p.name}${capTag}</div>
         <div style="font-size:10px;color:var(--d11-grey);width:35px;">${p.role}</div>
         <div style="font-size:12px;font-weight:800;width:40px;text-align:right;">${fmtPts(p.pts)}</div>
+        <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:var(--d11-grey);flex-shrink:0;margin-left:4px;"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
       </div>`;
     }).join('') : '<div style="padding:12px;text-align:center;font-size:11px;color:var(--d11-grey);">Player details available when match is live</div>';
 
@@ -3093,6 +3114,178 @@ function renderAllSquads() {
       </div>
     </div>`;
   }).join('');
+}
+
+// ====== PLAYER SCORECARD BREAKDOWN ======
+function closePlayerScorecard() {
+  document.getElementById('player-scorecard-modal').style.display = 'none';
+}
+
+async function showPlayerScorecard(playerName, team, role) {
+  const modal = document.getElementById('player-scorecard-modal');
+  const content = document.getElementById('player-scorecard-content');
+  modal.style.display = 'block';
+  content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--d11-grey);font-size:13px;">Loading scorecard...</div>';
+
+  try {
+    const matchId = window._selectedMatchId;
+    if (!matchId || typeof D11API === 'undefined') {
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--d11-grey);">No match data available</div>';
+      return;
+    }
+
+    const scores = await D11API.getLiveScores(matchId);
+    if (!scores || scores.length === 0) {
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--d11-grey);">No live scoring data yet. Points will appear once the match begins.</div>';
+      return;
+    }
+
+    // Find this player's data
+    const pData = scores.find(s => s.players?.name === playerName);
+    if (!pData) {
+      content.innerHTML = `<div style="text-align:center;padding:40px;color:var(--d11-grey);">No data found for ${playerName}</div>`;
+      return;
+    }
+
+    const s = pData;
+    const statusColor = s.status === 'batting' ? 'var(--d11-green)' : s.status === 'bowling' ? 'var(--d11-blue)' : s.status === 'out' ? 'var(--d11-red)' : 'var(--d11-grey)';
+    const statusLabel = (s.status || 'waiting').charAt(0).toUpperCase() + (s.status || 'waiting').slice(1);
+
+    // Calculate detailed fantasy breakdown
+    const runs = s.runs || 0;
+    const balls = s.balls_faced || 0;
+    const fours = s.fours || 0;
+    const sixes = s.sixes || 0;
+    const sr = s.strike_rate || 0;
+    const wickets = s.wickets || 0;
+    const maidens = s.maidens || 0;
+    const eco = s.economy || 0;
+    const overs = s.overs_bowled || 0;
+    const catches = s.catches || 0;
+    const runOuts = s.run_outs || 0;
+    const stumpings = s.stumpings || 0;
+
+    const hasBatted = balls > 0 || runs > 0;
+    const hasBowled = overs > 0 || wickets > 0;
+    const hasFielded = catches > 0 || runOuts > 0 || stumpings > 0;
+    const isDismissed = s.status === 'out';
+
+    // Calculate fantasy points breakdown
+    const breakdown = [];
+    if (hasBatted || hasBowled) breakdown.push({ label: 'Playing XI', pts: 4 });
+
+    if (hasBatted) {
+      breakdown.push({ label: `Runs (${runs})`, pts: runs });
+      if (fours > 0) breakdown.push({ label: `Boundaries (${fours}×4)`, pts: fours * 1 });
+      if (sixes > 0) breakdown.push({ label: `Sixes (${sixes}×6)`, pts: sixes * 2 });
+      if (runs >= 100) breakdown.push({ label: 'Century Bonus', pts: 16 });
+      else if (runs >= 50) breakdown.push({ label: 'Half-Century Bonus', pts: 8 });
+      if (runs === 0 && isDismissed) breakdown.push({ label: 'Duck', pts: -2 });
+      if (balls >= 10) {
+        if (sr > 170) breakdown.push({ label: `SR Bonus (${sr.toFixed(1)})`, pts: 6 });
+        else if (sr < 70) breakdown.push({ label: `SR Penalty (${sr.toFixed(1)})`, pts: -6 });
+      }
+    }
+
+    if (hasBowled) {
+      if (wickets > 0) breakdown.push({ label: `Wickets (${wickets})`, pts: wickets * 25 });
+      if (maidens > 0) breakdown.push({ label: `Maidens (${maidens})`, pts: maidens * 12 });
+      if (wickets >= 5) breakdown.push({ label: '5-Wicket Haul', pts: 16 });
+      else if (wickets >= 4) breakdown.push({ label: '4-Wicket Haul', pts: 8 });
+      else if (wickets >= 3) breakdown.push({ label: '3-Wicket Bonus', pts: 4 });
+      if (overs >= 2) {
+        if (eco < 5) breakdown.push({ label: `Economy Bonus (${eco.toFixed(1)})`, pts: 6 });
+        else if (eco > 10) breakdown.push({ label: `Economy Penalty (${eco.toFixed(1)})`, pts: -6 });
+      }
+    }
+
+    if (catches > 0) breakdown.push({ label: `Catches (${catches})`, pts: catches * 8 });
+    if (runOuts > 0) breakdown.push({ label: `Run Outs (${runOuts})`, pts: runOuts * 12 });
+    if (stumpings > 0) breakdown.push({ label: `Stumpings (${stumpings})`, pts: stumpings * 12 });
+
+    const totalPts = breakdown.reduce((sum, b) => sum + b.pts, 0);
+
+    let html = '';
+
+    // Player header
+    html += `<div style="padding:16px;text-align:center;border-bottom:1px solid var(--d11-border);">
+      <div style="font-size:18px;font-weight:900;">${playerName}</div>
+      <div style="font-size:12px;color:var(--d11-grey);margin-top:2px;">${team} • ${role}</div>
+      <div style="margin-top:8px;">
+        <span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;background:${statusColor};color:white;">${statusLabel}</span>
+      </div>
+      <div style="font-size:32px;font-weight:900;color:var(--d11-green);margin-top:8px;">${fmtPts(s.fantasy_pts || 0)}</div>
+      <div style="font-size:11px;color:var(--d11-grey);">Fantasy Points</div>
+    </div>`;
+
+    // Batting section
+    if (hasBatted) {
+      html += `<div style="padding:12px 16px;border-bottom:1px solid var(--d11-border);">
+        <div style="font-size:11px;font-weight:800;color:var(--d11-orange);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Batting</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+          <div><div style="font-size:18px;font-weight:900;">${runs}</div><div style="font-size:9px;color:var(--d11-grey);">Runs</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${balls}</div><div style="font-size:9px;color:var(--d11-grey);">Balls</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${fours}</div><div style="font-size:9px;color:var(--d11-grey);">4s</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${sixes}</div><div style="font-size:9px;color:var(--d11-grey);">6s</div></div>
+        </div>
+        <div style="text-align:center;margin-top:6px;font-size:11px;color:var(--d11-grey);">SR: <span style="font-weight:700;color:var(--d11-white);">${sr > 0 ? sr.toFixed(1) : '—'}</span></div>
+      </div>`;
+    }
+
+    // Bowling section
+    if (hasBowled) {
+      html += `<div style="padding:12px 16px;border-bottom:1px solid var(--d11-border);">
+        <div style="font-size:11px;font-weight:800;color:var(--d11-blue);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Bowling</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+          <div><div style="font-size:18px;font-weight:900;">${overs}</div><div style="font-size:9px;color:var(--d11-grey);">Overs</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${wickets}</div><div style="font-size:9px;color:var(--d11-grey);">Wickets</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${maidens}</div><div style="font-size:9px;color:var(--d11-grey);">Maidens</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${s.runs_conceded || 0}</div><div style="font-size:9px;color:var(--d11-grey);">Runs</div></div>
+        </div>
+        <div style="text-align:center;margin-top:6px;font-size:11px;color:var(--d11-grey);">Economy: <span style="font-weight:700;color:var(--d11-white);">${eco > 0 ? eco.toFixed(1) : '—'}</span></div>
+      </div>`;
+    }
+
+    // Fielding section
+    if (hasFielded) {
+      html += `<div style="padding:12px 16px;border-bottom:1px solid var(--d11-border);">
+        <div style="font-size:11px;font-weight:800;color:var(--d11-green);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Fielding</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+          <div><div style="font-size:18px;font-weight:900;">${catches}</div><div style="font-size:9px;color:var(--d11-grey);">Catches</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${runOuts}</div><div style="font-size:9px;color:var(--d11-grey);">Run Outs</div></div>
+          <div><div style="font-size:18px;font-weight:900;">${stumpings}</div><div style="font-size:9px;color:var(--d11-grey);">Stumpings</div></div>
+        </div>
+      </div>`;
+    }
+
+    // Fantasy Points Breakdown
+    html += `<div style="padding:12px 16px;">
+      <div style="font-size:11px;font-weight:800;color:var(--d11-gold);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Points Breakdown</div>`;
+
+    if (breakdown.length === 0) {
+      html += `<div style="text-align:center;padding:12px;font-size:12px;color:var(--d11-grey);">Yet to participate</div>`;
+    } else {
+      breakdown.forEach(b => {
+        const color = b.pts > 0 ? 'var(--d11-green)' : b.pts < 0 ? 'var(--d11-red)' : 'var(--d11-grey)';
+        const sign = b.pts > 0 ? '+' : '';
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--d11-border);font-size:12px;">
+          <span style="color:var(--d11-light);">${b.label}</span>
+          <span style="font-weight:800;color:${color};">${sign}${b.pts}</span>
+        </div>`;
+      });
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;font-size:14px;font-weight:900;">
+        <span>Total</span>
+        <span style="color:var(--d11-green);">${totalPts}</span>
+      </div>`;
+    }
+
+    html += `</div>`;
+
+    content.innerHTML = html;
+  } catch(e) {
+    console.error('Player scorecard error:', e);
+    content.innerHTML = `<div style="text-align:center;padding:40px;color:var(--d11-red);font-size:13px;">Error loading scorecard: ${e.message}</div>`;
+  }
 }
 
 function renderCompare() {
