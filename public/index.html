@@ -1298,6 +1298,33 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div id="admin-live-result" style="font-size:12px;color:var(--d11-grey);margin-top:8px;"></div>
       </div>
 
+      <!-- Manual Score Updater -->
+      <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">🏏 Score Updater</div>
+        <div style="font-size:12px;color:var(--d11-grey);margin-bottom:12px;">Manually update match scores, status and result</div>
+        <div id="admin-score-match-selector" style="margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <select id="admin-score-status" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--d11-border);background:var(--d11-surface);color:var(--d11-white);font-size:13px;">
+            <option value="upcoming">Upcoming</option>
+            <option value="live" selected>Live</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="admin-score-a" placeholder="Team A score e.g. 156/4 (18.2)" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--d11-border);background:var(--d11-surface);color:var(--d11-white);font-size:13px;">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input id="admin-score-b" placeholder="Team B score e.g. 98/3 (12.0) or Yet to bat" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--d11-border);background:var(--d11-surface);color:var(--d11-white);font-size:13px;">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input id="admin-score-result" placeholder="Result e.g. MI won by 5 wickets (optional)" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--d11-border);background:var(--d11-surface);color:var(--d11-white);font-size:13px;">
+        </div>
+        <button id="admin-score-btn" onclick="adminUpdateScore()" style="width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--d11-green),#1B8A4A);color:white;font-size:14px;font-weight:700;cursor:pointer;">
+          Update Score
+        </button>
+        <div id="admin-score-result-msg" style="font-size:12px;color:var(--d11-grey);margin-top:8px;"></div>
+      </div>
+
       <!-- Live Matches Quick Start -->
       <div style="background:var(--d11-card);border-radius:12px;padding:16px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📋 Live/Upcoming Matches</div>
@@ -2581,6 +2608,9 @@ async function loadAdminPanel() {
   if (D11API.isLiveUpdating()) {
     document.getElementById('admin-live-result').innerHTML = '<span style="color:var(--d11-green);">● Live updates running</span>';
   }
+
+  // Load score updater match selector
+  loadScoreMatchSelector();
 }
 
 async function adminSyncMatches() {
@@ -2624,6 +2654,68 @@ function adminStopLive() {
   D11API.stopLiveUpdates();
   document.getElementById('admin-live-result').innerHTML = '<span style="color:var(--d11-grey);">Stopped</span>';
   adminLog('Live updates stopped');
+}
+
+// ====== SCORE UPDATER ======
+async function loadScoreMatchSelector() {
+  if (typeof D11API === 'undefined') return;
+  try {
+    const matches = await D11API.getMatches();
+    const relevant = (matches || []).filter(m => m.status === 'live' || m.status === 'upcoming').slice(0, 15);
+    const container = document.getElementById('admin-score-match-selector');
+    if (!container) return;
+    container.innerHTML = '<select id="admin-score-match" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--d11-border);background:var(--d11-surface);color:var(--d11-white);font-size:13px;" onchange="adminScoreMatchChanged()">' +
+      '<option value="">— Select Match —</option>' +
+      relevant.map(m => {
+        const badge = m.status === 'live' ? ' 🔴 LIVE' : '';
+        return '<option value="' + m.id + '">' + m.team_a + ' vs ' + m.team_b + badge + '</option>';
+      }).join('') +
+      '</select>';
+  } catch(e) { console.warn('loadScoreMatchSelector error:', e); }
+}
+
+function adminScoreMatchChanged() {
+  const matchId = document.getElementById('admin-score-match').value;
+  if (!matchId || !window._allMatches) return;
+  const match = window._allMatches.find(m => m.id === matchId);
+  if (!match) return;
+  document.getElementById('admin-score-status').value = match.status || 'upcoming';
+  document.getElementById('admin-score-a').value = match.score_a || '';
+  document.getElementById('admin-score-b').value = match.score_b || '';
+  document.getElementById('admin-score-result').value = match.result || '';
+}
+
+async function adminUpdateScore() {
+  const matchId = document.getElementById('admin-score-match')?.value;
+  if (!matchId) { showToast('Select a match first'); return; }
+
+  const btn = document.getElementById('admin-score-btn');
+  const msg = document.getElementById('admin-score-result-msg');
+  btn.disabled = true; btn.textContent = 'Updating...';
+
+  const updates = {
+    status: document.getElementById('admin-score-status').value,
+    score_a: document.getElementById('admin-score-a').value.trim(),
+    score_b: document.getElementById('admin-score-b').value.trim(),
+    result: document.getElementById('admin-score-result').value.trim(),
+  };
+
+  try {
+    const result = await D11API.updateMatchScore(matchId, updates);
+    if (result.success) {
+      msg.innerHTML = '<span style="color:var(--d11-green);">✓ Score updated!</span>';
+      adminLog('Score updated: ' + updates.score_a + ' / ' + updates.score_b + ' [' + updates.status + ']');
+      // Refresh the match selector
+      loadScoreMatchSelector();
+    } else {
+      msg.innerHTML = '<span style="color:var(--d11-red);">✗ ' + (result.error || 'Update failed') + '</span>';
+      adminLog('Score update failed: ' + result.error);
+    }
+  } catch(err) {
+    msg.innerHTML = '<span style="color:var(--d11-red);">✗ Error: ' + err + '</span>';
+    adminLog('Score update error: ' + err);
+  }
+  btn.disabled = false; btn.textContent = 'Update Score';
 }
 
 // Triple-tap D11 logo to access admin (hidden entry point)

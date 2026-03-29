@@ -150,6 +150,23 @@
       if (error) throw error;
       return data;
     },
+
+    async updateMatchScore(matchId, updates) {
+      const sb = await initSupabase();
+      if (!currentUser) return { success: false, error: 'Not logged in' };
+      const allowed = {};
+      if (updates.status) allowed.status = updates.status;
+      if (updates.score_a !== undefined) allowed.score_a = updates.score_a || null;
+      if (updates.score_b !== undefined) allowed.score_b = updates.score_b || null;
+      if (updates.result !== undefined) allowed.result = updates.result || null;
+      const { data, error } = await sb.from('matches')
+        .update(allowed)
+        .eq('id', matchId)
+        .select()
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, match: data };
+    },
   };
 
   // ====== PLAYERS MODULE ======
@@ -820,6 +837,7 @@
     // Matches
     getMatches: Matches.getMatches,
     getMatch: Matches.getMatch,
+    updateMatchScore: Matches.updateMatchScore,
 
     // Players
     getPlayers: Players.getPlayers,
