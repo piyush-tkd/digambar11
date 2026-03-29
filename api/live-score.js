@@ -40,17 +40,25 @@ function resolveTeamCode(name) {
   return null;
 }
 
-function mapStatus(raw) {
-  const s = (raw || '').toLowerCase();
-  if (['finished', 'aban.', 'cancelled', 'postp.'].some(x => s === x)) {
-    if (s === 'finished') return 'completed';
-    return 'abandoned';
-  }
-  if (s.includes('won') || s.includes('result') || s.includes('completed') || s === 'match over' || s === 'finished') return 'completed';
+function mapStatus(raw, note) {
+  const s = (raw || '').toLowerCase().trim();
+  const n = (note || '').toLowerCase().trim();
+
+  // Check note first — "X won by Y" is definitive
+  if (n.includes('won') || n.includes('result') || n.includes('tied') || n.includes('draw')) return 'completed';
+
+  // Exact status matches
+  if (s === 'finished' || s === 'ended' || s === 'match over') return 'completed';
+  if (s === 'aban.' || s === 'cancelled' || s === 'postp.') return 'abandoned';
+
+  // Contains matches
+  if (s.includes('won') || s.includes('result') || s.includes('completed') || s.includes('finished') || s.includes('ended')) return 'completed';
   if (['1st innings', '2nd innings', 'innings break', 'stump day 1', 'stump day 2', 'stump day 3', 'stump day 4'].some(x => s === x)) return 'live';
   if (s.includes('live') || s.includes('break') || s.includes('innings') || s.includes('timeout') || s.includes('in progress')) return 'live';
   if (s.includes('abandon') || s.includes('no result')) return 'abandoned';
   if (s.includes('upcoming') || s.includes('not started') || s.includes('scheduled') || s === '' || s === 'ns') return 'upcoming';
+
+  console.log(`[mapStatus] Unknown status: "${raw}" note: "${note}" — defaulting to live`);
   return 'live'; // Default to live if unknown
 }
 
@@ -124,10 +132,12 @@ async function getProviderKey(providerId) {
 
 // ─── DB Helpers ─────────────────────────────────────────────
 async function getDbLiveMatches() {
+  // Include 'completed' matches from last 6 hours for final fantasy pass
+  const sixHoursAgo = new Date(Date.now() - 6 * 3600000).toISOString();
   const { data } = await supabase
     .from('matches')
     .select('id, external_id, team_a, team_b, status, starts_at')
-    .in('status', ['live', 'upcoming']);
+    .or(`status.in.(live,upcoming),and(status.eq.completed,updated_at.gte.${sixHoursAgo})`);
   return data || [];
 }
 
@@ -235,7 +245,8 @@ async function fetchSportmonks(dbMatches) {
       const code1 = resolveTeamCode(localTeamName);
       const code2 = resolveTeamCode(visitorTeamName);
 
-      console.log(`[Sportmonks] Match: ${localTeamName} (${code1}) vs ${visitorTeamName} (${code2}) | status: ${m.status}`);
+      const rawStatus = m.status;
+      console.log(`[Sportmonks] Match: ${localTeamName} (${code1}) vs ${visitorTeamName} (${code2}) | raw_status: "${rawStatus}" | note: "${m.note || ''}" | mapped: "${mapStatus(rawStatus, m.note)}"`);
 
       if (!code1 || !code2) {
         console.log(`[Sportmonks] Skipping non-IPL match: ${localTeamName} vs ${visitorTeamName}`);
@@ -265,11 +276,17 @@ async function fetchSportmonks(dbMatches) {
 
       const scoreA = scoreMap[dbMatch.team_a] || 'Yet to bat';
       const scoreB = scoreMap[dbMatch.team_b] || 'Yet to bat';
-      const status = mapStatus(m.status || '');
+      const status = mapStatus(m.status || '', m.note || '');
       const result = m.note || m.status || null;
 
       if (status === 'upcoming') {
         console.log(`[Sportmonks] Match ${code1} vs ${code2} still upcoming, skipping`);
+        continue;
+      }
+
+      // Skip if DB already says completed and API also says completed (no need to re-process)
+      if (dbMatch.status === 'completed' && status === 'completed') {
+        console.log(`[Sportmonks] Match ${code1} vs ${code2} already completed in DB, skipping`);
         continue;
       }
 
@@ -586,15 +603,78 @@ async function processFantasyPoints(
   }
 
   // Recalculate user team points and ranks
+  // Try RPC first, fall back to JS-based calculation
+  let rpcOk = false;
   try {
     const { error: rpcError } = await supabase.rpc('calculate_user_team_points', { p_match_id: dbMatchId });
     if (rpcError) {
-      console.warn(`[Fantasy] RPC calculate_user_team_points error:`, rpcError.message);
+      console.warn(`[Fantasy] RPC calculate_user_team_points error: ${rpcError.message} — falling back to JS calc`);
     } else {
-      console.log(`[Fantasy] ✓ Recalculated user team points for match ${dbMatchId}`);
+      console.log(`[Fantasy] ✓ Recalculated user team points via RPC for match ${dbMatchId}`);
+      rpcOk = true;
     }
   } catch (rpcErr) {
-    console.warn(`[Fantasy] RPC error:`, rpcErr.message);
+    console.warn(`[Fantasy] RPC error: ${rpcErr.message} — falling back to JS calc`);
+  }
+
+  // JS fallback: calculate team points manually
+  if (!rpcOk) {
+    try {
+      // Get all user teams for this match with their players
+      const { data: userTeams } = await supabase
+        .from('user_teams')
+        .select('id, user_id, captain_id, vice_captain_id, user_team_players(player_id)')
+        .eq('match_id', dbMatchId);
+
+      if (userTeams && userTeams.length > 0) {
+        // Get all live_scores for this match
+        const { data: scores } = await supabase
+          .from('live_scores')
+          .select('player_id, fantasy_pts')
+          .eq('match_id', dbMatchId);
+
+        const scoreMap = {};
+        for (const s of (scores || [])) {
+          scoreMap[s.player_id] = s.fantasy_pts || 0;
+        }
+
+        for (const ut of userTeams) {
+          let totalPts = 0;
+          for (const utp of (ut.user_team_players || [])) {
+            let pts = scoreMap[utp.player_id] || 0;
+            if (utp.player_id === ut.captain_id) pts *= 2;
+            else if (utp.player_id === ut.vice_captain_id) pts *= 1.5;
+            totalPts += pts;
+          }
+          totalPts = Math.round(totalPts * 10) / 10;
+
+          await supabase
+            .from('user_teams')
+            .update({ total_points: totalPts })
+            .eq('id', ut.id);
+        }
+
+        // Rank contest entries
+        const { data: entries } = await supabase
+          .from('contest_entries')
+          .select('id, user_team_id, user_teams!inner(total_points)')
+          .eq('user_teams.match_id', dbMatchId)
+          .order('user_teams(total_points)', { ascending: false });
+
+        if (entries) {
+          for (let i = 0; i < entries.length; i++) {
+            await supabase
+              .from('contest_entries')
+              .update({ rank: i + 1 })
+              .eq('id', entries[i].id);
+          }
+        }
+
+        console.log(`[Fantasy] ✓ JS fallback: updated ${userTeams.length} user_teams points for match ${dbMatchId}`);
+      }
+    } catch (fallbackErr) {
+      console.error(`[Fantasy] JS fallback calc error:`, fallbackErr.message);
+    }
   }
 
   return { match_id: dbMatchId, players: upserts.length, matched: matchedCount };
