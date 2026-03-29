@@ -857,7 +857,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 
     <div class="selection-footer" style="display:flex; gap:10px;">
       <button class="next-btn enabled" style="flex:1;" onclick="showScreen('impact')">✏️ EDIT</button>
-      <button class="next-btn enabled" style="flex:1; background: linear-gradient(135deg, var(--d11-red), #C41420);" onclick="confirmTeam()">CONTINUE →</button>
+      <button class="next-btn enabled" id="btn-confirm-team" style="flex:1; background: linear-gradient(135deg, var(--d11-red), #C41420);" onclick="confirmTeam()">CONTINUE →</button>
     </div>
   </div>
 
@@ -1696,8 +1696,10 @@ function showScreen(id) {
   if (id === 'team-select') {
     const isEditing = window._editingTeam;
     if (isEditing) {
-      // Editing — don't reset, just render with pre-populated state
+      // Editing — don't reset players, but sync role tabs to WK
       window._editingTeam = false;
+      currentRole = 'WK';
+      document.querySelectorAll('#screen-team-select .role-tab').forEach(t => t.classList.toggle('active', t.dataset.role === 'WK'));
     } else {
       resetTeamSelection();
     }
@@ -1878,9 +1880,13 @@ function goToCaptainSelect() {
     showToast(`Fix team composition: ${msg}`);
     return;
   }
-  captainId = null;
-  viceCaptainId = null;
-  impactPlayerId = null;
+  // Preserve captain/VC/IP if they're still in the selected players, otherwise reset
+  const selectedIds = selectedPlayers.map(p => p.id);
+  if (!captainId || !selectedIds.includes(captainId)) captainId = null;
+  if (!viceCaptainId || !selectedIds.includes(viceCaptainId)) viceCaptainId = null;
+  if (captainId && captainId === viceCaptainId) viceCaptainId = null;
+  // Impact player is NOT in selectedPlayers (it's the 12th man), so only clear if captain/VC changed to it
+  if (impactPlayerId && (impactPlayerId === captainId || impactPlayerId === viceCaptainId)) impactPlayerId = null;
   // Update captain & preview subtitles with current match
   const match = window._selectedMatch;
   if (match) {
@@ -1940,7 +1946,8 @@ let impactRoleFilter = 'ALL';
 
 function goToImpactPlayer() {
   if (!captainId || !viceCaptainId || captainId === viceCaptainId) return;
-  impactPlayerId = null;
+  // Preserve impact player if still valid (not C/VC and exists)
+  if (impactPlayerId && (impactPlayerId === captainId || impactPlayerId === viceCaptainId)) impactPlayerId = null;
   impactRoleFilter = 'ALL';
   showScreen('impact');
   renderImpactPlayerList();
@@ -2063,7 +2070,7 @@ async function confirmTeam() {
   const matchId = window._selectedMatchId;
   if (!matchId || !captainId || !viceCaptainId || !impactPlayerId) return;
 
-  const btn = document.querySelector('#screen-preview .next-btn');
+  const btn = document.getElementById('btn-confirm-team');
   if (btn) { btn.disabled = true; btn.textContent = 'SAVING...'; }
 
   try {
@@ -3646,22 +3653,7 @@ completeSetup = async function() {
   showScreen('home');
 };
 
-// Override confirmTeam to use API
-const _originalConfirmTeam = confirmTeam;
-confirmTeam = async function() {
-  if (typeof D11API !== 'undefined') {
-    const matchId = window._selectedMatchId || 'match-28';
-    const playerIds = selectedPlayers.map(p => p.id);
-    const result = await D11API.saveTeam(matchId, playerIds, captainId, viceCaptainId, impactPlayerId);
-    if (result.success) {
-      showScreen('match-detail');
-      return;
-    }
-    showToast(result.errors?.join(', ') || 'Error saving team');
-    return;
-  }
-  _originalConfirmTeam();
-};
+// confirmTeam is now fully handled in the main function above (with try-catch, joinFriendsLeague, wallet)
 
 // ====== LOGOUT ======
 function doLogout() {
