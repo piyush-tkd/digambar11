@@ -1159,10 +1159,19 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
         <div style="display:flex;justify-content:space-between;padding:10px 14px;"><span style="font-size:12px;">Vice Captain</span><span style="font-size:12px;font-weight:700;color:var(--d11-blue);">1.5x points</span></div>
       </div>
 
+      <div class="section-label" style="color:#F2994A;">Impact Player (12th Man)</div>
+      <div style="background:var(--d11-card);border-radius:10px;padding:2px 0;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">IP enters the match as substitute</span><span style="font-size:12px;font-weight:700;color:var(--d11-green);">Earns full points</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">IP does NOT enter the match</span><span style="font-size:12px;font-weight:700;color:var(--d11-red);">0 pts</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">IP replaces a player in your XI</span><span style="font-size:12px;font-weight:700;color:var(--d11-orange);">Replaced player: 0 pts from that point</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">IP batting points</span><span style="font-size:12px;font-weight:700;color:var(--d11-green);">Same as regular (runs, 4s, 6s, SR)</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">IP bowling points</span><span style="font-size:12px;font-weight:700;color:var(--d11-green);">Same as regular (wickets, econ, maiden)</span></div>
+        <div style="display:flex;justify-content:space-between;padding:10px 14px;"><span style="font-size:12px;">IP cannot be Captain or VC</span><span style="font-size:12px;font-weight:700;color:var(--d11-grey);">No multiplier</span></div>
+      </div>
+
       <div class="section-label">Other</div>
       <div style="background:var(--d11-card);border-radius:10px;padding:2px 0;margin-bottom:14px;">
         <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Playing in starting XI</span><span style="font-size:12px;font-weight:700;color:var(--d11-green);">+4 pts</span></div>
-        <div style="display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--d11-border);"><span style="font-size:12px;">Impact Player (substitute)</span><span style="font-size:12px;font-weight:700;color:var(--d11-green);">Full pts if plays</span></div>
         <div style="display:flex;justify-content:space-between;padding:10px 14px;"><span style="font-size:12px;">Not in playing XI</span><span style="font-size:12px;font-weight:700;color:var(--d11-red);">0 pts (all)</span></div>
       </div>
 
@@ -2916,6 +2925,26 @@ async function renderMyTeamTab() {
       html += '</div>';
     });
 
+    // Impact Player (12th man) — stored on user_teams, NOT in user_team_players
+    if (team.impact_player_id) {
+      const allP = getAllPlayers();
+      const ip = allP.find(p => p.id === team.impact_player_id);
+      if (ip) {
+        const ipInitials = ip.name.split(' ').map(w => w[0]).join('').slice(0, 2);
+        const ipTeamCode = getTeamCode(ip.team || '');
+        html += `<div style="margin-bottom:12px;border-top:2px dashed rgba(255,255,255,0.2);padding-top:12px;">
+          <div style="font-size:10px;font-weight:700;color:#F2994A;text-transform:uppercase;margin-bottom:6px;letter-spacing:1px;">12th MAN — IMPACT PLAYER</div>
+          <div style="display:flex;align-items:center;padding:8px 10px;background:var(--d11-card);border-radius:8px;border-left:3px solid #F2994A;">
+            <div style="width:30px;height:30px;border-radius:50%;background:${TEAM_COLORS[ipTeamCode] || '#555'};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;margin-right:10px;">${ipInitials}</div>
+            <div style="flex:1;">
+              <div style="font-size:13px;font-weight:600;">${ip.name}<span style="background:#F2994A;color:#fff;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:800;margin-left:6px;">IP</span></div>
+              <div style="font-size:10px;color:var(--d11-grey);">${ipTeamCode} • ${ip.credit} Cr</div>
+            </div>
+          </div>
+        </div>`;
+      }
+    }
+
     // Edit button at bottom
     const match = window._selectedMatch;
     const matchStarted = match && new Date(match.starts_at) <= new Date();
@@ -3010,10 +3039,12 @@ async function checkUserTeamStatus(matchId) {
       const players = team.user_team_players.map(tp => tp.players).filter(Boolean);
       const capPlayer = players.find(p => p.id === team.captain_id);
       const vcPlayer = players.find(p => p.id === team.vice_captain_id);
-      const ipPlayer = players.find(p => p.id === team.impact_player_id);
+      // IP is 12th man — not in user_team_players, look up from loaded players
+      const allP = getAllPlayers();
+      const ipPlayer = allP.find(p => p.id === team.impact_player_id);
       const summaryEl = document.getElementById('my-team-mini-summary');
       if (summaryEl) {
-        summaryEl.textContent = `C: ${capPlayer?.name || '—'} • VC: ${vcPlayer?.name || '—'} • IP: ${ipPlayer?.name || '—'} • ${players.length} players`;
+        summaryEl.textContent = `C: ${capPlayer?.name || '—'} • VC: ${vcPlayer?.name || '—'} • IP: ${ipPlayer?.name || '—'} • ${players.length + (ipPlayer ? 1 : 0)} players`;
       }
 
       // Change bottom button to Edit Team
