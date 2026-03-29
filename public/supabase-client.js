@@ -191,41 +191,18 @@
       const { data: { session } } = await sb.auth.getSession();
       if (!session) return { success: false, errors: ['Not logged in'] };
 
-      // Try Edge Function first, fallback to direct save if it fails (503/network)
-      try {
-        const res = await fetch(`${FUNCTIONS_URL}/team-validation`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': SUPABASE_ANON_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            match_id: matchId,
-            player_ids: playerIds,
-            captain_id: captainId,
-            vice_captain_id: viceCaptainId,
-            impact_player_id: impactPlayerId || null,
-          }),
-        });
-        if (res.ok || res.status === 400) {
-          return await res.json();
-        }
-        // 401/403/5xx — fall through to direct save
-        console.warn('Edge Function returned', res.status, '— falling back to direct save');
-      } catch (e) {
-        console.warn('Edge Function unreachable — falling back to direct save:', e.message);
-      }
+      // Deduplicate player IDs
+      const uniquePlayerIds = [...new Set(playerIds)];
 
-      // ===== DIRECT SAVE FALLBACK (client-side validation) =====
+      // ===== CLIENT-SIDE VALIDATION =====
       const errors = [];
-      if (!playerIds || playerIds.length !== 11) errors.push(`Must select exactly 11 players (got ${playerIds?.length || 0})`);
-      if (captainId && !playerIds.includes(captainId)) errors.push('Captain must be in your team');
-      if (viceCaptainId && !playerIds.includes(viceCaptainId)) errors.push('Vice-captain must be in your team');
+      if (!uniquePlayerIds || uniquePlayerIds.length !== 11) errors.push(`Must select exactly 11 players (got ${uniquePlayerIds?.length || 0})`);
+      if (captainId && !uniquePlayerIds.includes(captainId)) errors.push('Captain must be in your team');
+      if (viceCaptainId && !uniquePlayerIds.includes(viceCaptainId)) errors.push('Vice-captain must be in your team');
       if (captainId && captainId === viceCaptainId) errors.push('Captain and Vice-captain must be different');
 
       // Fetch player details for credit/role validation
-      const { data: players, error: plErr } = await sb.from('players').select('id, name, team, role, credit, overseas').in('id', playerIds);
+      const { data: players, error: plErr } = await sb.from('players').select('id, name, team, role, credit, overseas').in('id', uniquePlayerIds);
       if (plErr || !players) return { success: false, errors: ['Failed to fetch player data'] };
 
       const totalCredits = players.reduce((s, p) => s + Number(p.credit), 0);
@@ -260,26 +237,21 @@
 
       if (teamErr || !team) return { success: false, errors: ['Failed to save team: ' + (teamErr?.message || 'unknown')] };
 
-      // Replace players — deduplicate IDs first, then delete old rows before inserting
-      const uniquePlayerIds = [...new Set(playerIds)];
-      const { error: delErr } = await sb.from('user_team_players').delete().eq('user_team_id', team.id);
-      if (delErr) {
-        console.warn('Failed to delete old players, trying upsert approach:', delErr.message);
-        // Fallback: upsert each player individually (handles RLS issues)
-        for (const pid of uniquePlayerIds) {
-          await sb.from('user_team_players').upsert(
-            { user_team_id: team.id, player_id: pid },
-            { onConflict: 'user_team_id,player_id' }
-          );
-        }
-      } else {
-        const { error: insErr } = await sb.from('user_team_players').insert(
-          uniquePlayerIds.map(pid => ({ user_team_id: team.id, player_id: pid }))
-        );
-        if (insErr) return { success: false, errors: ['Failed to save players: ' + insErr.message] };
-      }
+      // Replace players using upsert (avoids delete RLS issues entirely)
+      // Step 1: Upsert all new players (creates or updates)
+      const playerRows = uniquePlayerIds.map(pid => ({ user_team_id: team.id, player_id: pid }));
+      const { error: upsertErr } = await sb.from('user_team_players')
+        .upsert(playerRows, { onConflict: 'user_team_id,player_id' });
+      if (upsertErr) return { success: false, errors: ['Failed to save players: ' + upsertErr.message] };
 
-      console.log('Team saved via direct fallback');
+      // Step 2: Delete any old players that are NOT in the new selection
+      const { error: cleanupErr } = await sb.from('user_team_players')
+        .delete()
+        .eq('user_team_id', team.id)
+        .not('player_id', 'in', `(${uniquePlayerIds.join(',')})`);
+      if (cleanupErr) console.warn('Cleanup of old players failed (non-critical):', cleanupErr.message);
+
+      console.log('Team saved successfully');
       return { success: true, team_id: team.id, total_credits: totalCredits, composition: rc };
     },
 

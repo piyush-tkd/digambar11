@@ -269,6 +269,8 @@ CREATE POLICY "Users can update own teams" ON user_teams FOR UPDATE USING (auth.
 CREATE POLICY "Team players are viewable" ON user_team_players FOR SELECT USING (TRUE);
 CREATE POLICY "Users can add players to own teams" ON user_team_players FOR INSERT
   WITH CHECK (EXISTS (SELECT 1 FROM user_teams WHERE id = user_team_id AND user_id = auth.uid()));
+CREATE POLICY "Users can delete players from own teams" ON user_team_players FOR DELETE
+  USING (EXISTS (SELECT 1 FROM user_teams WHERE id = user_team_id AND user_id = auth.uid()));
 
 -- Contests: everyone can read, creator can manage
 CREATE POLICY "Contests are viewable by everyone" ON contests FOR SELECT USING (TRUE);
