@@ -1692,23 +1692,9 @@ async function loadHomeMatches() {
       }
     } catch(e) { console.log('Could not fetch joined matches:', e); }
 
-    const now = new Date();
-    // Use DB status as primary source; use time-based fallback only for 'upcoming' matches
-    // that have already started (DB status may not have been updated yet)
-    const MATCH_DURATION_MS = 4 * 60 * 60 * 1000;
+    // Trust DB status directly — auto-scorer updates it in real time
     matches.forEach(m => {
-      const start = new Date(m.starts_at);
-      const elapsed = now - start;
-      if (m.status === 'live') {
-        m._effectiveStatus = 'live';
-      } else if (m.status === 'completed') {
-        m._effectiveStatus = 'completed';
-      } else {
-        // DB says 'upcoming' (or null) — check if match has actually started
-        if (elapsed < 0) m._effectiveStatus = 'upcoming';
-        else if (elapsed < MATCH_DURATION_MS) m._effectiveStatus = 'live';
-        else m._effectiveStatus = 'completed';
-      }
+      m._effectiveStatus = m.status || 'upcoming';
       m._joined = joinedMatchIds.has(m.id);
     });
     const live = matches.filter(m => m._effectiveStatus === 'live');
@@ -2491,26 +2477,49 @@ async function loadLiveMatchData() {
 async function loadLivePlayerScores(matchId) {
   if (typeof D11API === 'undefined') return;
   try {
-    const scores = await D11API.getLiveScores(matchId);
-    if (!scores || scores.length === 0) {
-      // No live_scores rows yet — friendSquads already has players from loadMatchLeaderboard
-      renderLiveScorecard();
-      renderAllSquads(); // re-render with player data from user_teams
-      return;
+    // Try DB live_scores first, then fall back to in-memory from auto-scorer
+    let scores = await D11API.getLiveScores(matchId);
+    let playerScoresMap = {};
+
+    if (scores && scores.length > 0) {
+      // From DB live_scores table
+      scores.forEach(s => {
+        const pName = s.players?.name || 'Unknown';
+        playerScoresMap[pName] = {
+          pts: s.fantasy_pts || 0,
+          status: s.status || 'waiting',
+          runs: s.runs || 0,
+          wickets: s.wickets || 0,
+          catches: s.catches || 0,
+        };
+      });
+    } else if (window._liveFantasyPoints && window._liveFantasyPoints[matchId]) {
+      // From in-memory auto-scorer data
+      const memScores = window._liveFantasyPoints[matchId];
+      // We need player names — fetch from DB
+      const sb = await D11API.init();
+      const { data: players } = await sb.from('players').select('id, name');
+      const nameMap = {};
+      if (players) players.forEach(p => { nameMap[p.id] = p.name; });
+
+      memScores.forEach(s => {
+        const pName = nameMap[s.player_id] || 'Unknown';
+        playerScoresMap[pName] = {
+          pts: s.fantasy_pts || 0,
+          status: s.status || 'waiting',
+          runs: s.runs || 0,
+          wickets: s.wickets || 0,
+          catches: s.catches || 0,
+        };
+      });
     }
 
-    // Build player scores map from live_scores table (keyed by player name for matching)
-    const playerScoresMap = {};
-    scores.forEach(s => {
-      const pName = s.players?.name || 'Unknown';
-      playerScoresMap[pName] = {
-        pts: s.fantasy_pts || 0,
-        status: s.status || 'waiting',
-        runs: s.runs || 0,
-        wickets: s.wickets || 0,
-        catches: s.catches || 0,
-      };
-    });
+    if (Object.keys(playerScoresMap).length === 0) {
+      // No scoring data at all — just render with what friendSquads has
+      renderLiveScorecard();
+      renderAllSquads();
+      return;
+    }
 
     // Merge live points into every squad's players in friendSquads
     Object.values(friendSquads).forEach(sq => {
@@ -2528,7 +2537,7 @@ async function loadLivePlayerScores(matchId) {
     });
 
     renderLiveScorecard();
-    renderAllSquads(); // re-render with updated points
+    renderAllSquads();
   } catch(e) {
     console.warn('Failed to load live player scores:', e);
     renderLiveScorecard();
@@ -2867,6 +2876,66 @@ function stopAutoScoring() {
   autoScoreLog('Auto-scoring stopped');
 }
 
+// ─── Fantasy Points Calculator ───────────────────────────────
+function calcFantasyPoints(batting, bowling, fielding) {
+  let pts = 0;
+
+  // Batting
+  if (batting) {
+    const runs = batting.r || 0;
+    const balls = batting.b || 0;
+    const fours = batting['4s'] || 0;
+    const sixes = batting['6s'] || 0;
+    const sr = balls > 0 ? (runs / balls) * 100 : 0;
+    const isDismissed = batting.dismissal && batting.dismissal !== 'not out';
+
+    pts += runs;                          // +1 per run
+    pts += fours * 1;                     // +1 bonus per boundary
+    pts += sixes * 2;                     // +2 bonus per six
+    if (runs >= 100) pts += 16;           // Century bonus
+    else if (runs >= 50) pts += 8;        // Half-century bonus
+    if (runs === 0 && isDismissed) pts -= 2; // Duck penalty (BAT/WK/AR)
+
+    // Strike rate bonus/penalty (only if 10+ balls faced)
+    if (balls >= 10) {
+      if (sr > 170) pts += 6;
+      else if (sr < 70) pts -= 6;
+    }
+  }
+
+  // Bowling
+  if (bowling) {
+    const wickets = bowling.w || 0;
+    const maidens = bowling.m || 0;
+    const eco = bowling.eco || 0;
+    const overs = bowling.o || 0;
+
+    pts += wickets * 25;                  // +25 per wicket
+    pts += maidens * 12;                  // +12 per maiden
+    if (wickets >= 5) pts += 16;          // 5-wicket haul
+    else if (wickets >= 4) pts += 8;      // 4-wicket haul
+    else if (wickets >= 3) pts += 4;      // 3-wicket haul
+
+    // Economy bonus/penalty (only if 2+ overs bowled)
+    if (overs >= 2) {
+      if (eco < 5) pts += 6;
+      else if (eco > 10) pts -= 6;
+    }
+  }
+
+  // Fielding
+  if (fielding) {
+    pts += (fielding.catch || 0) * 8;     // +8 per catch
+    pts += (fielding.stumped || 0) * 12;  // +12 per stumping
+    pts += (fielding.runout || 0) * 12;   // +12 per run out
+  }
+
+  // Playing in XI bonus (+4) — if they have any data, they played
+  if (batting || bowling) pts += 4;
+
+  return pts;
+}
+
 async function fetchAndUpdateScores(apiKey) {
   if (typeof D11API === 'undefined') return;
 
@@ -2891,10 +2960,12 @@ async function fetchAndUpdateScores(apiKey) {
     const apiMatches = data.data || [];
     autoScoreLog(`Got ${apiMatches.length} matches from CricAPI`);
 
-    // 2. Filter for IPL matches only
+    // 2. Filter for IPL matches only (strict: must have "ipl" in series field)
     const iplMatches = apiMatches.filter(m => {
-      const series = (m.series || m.name || '').toLowerCase();
-      return series.includes('ipl') || series.includes('indian premier league');
+      const series = (m.series || '').toLowerCase();
+      const name = (m.name || '').toLowerCase();
+      return series.includes('ipl') || series.includes('indian premier league') ||
+             name.includes('ipl') || name.includes('indian premier league');
     });
 
     if (iplMatches.length === 0) {
@@ -2917,10 +2988,9 @@ async function fetchAndUpdateScores(apiKey) {
       return;
     }
 
-    // 4. Match API data to DB and update
+    // 4. Match API data to DB and update scores + fetch player scorecards
     let updatedCount = 0;
     for (const m of iplMatches) {
-      // Resolve team codes from API
       const t1 = m.teamInfo?.[0]?.shortname || m.teams?.[0] || '';
       const t2 = m.teamInfo?.[1]?.shortname || m.teams?.[1] || '';
       const code1 = resolveTeamCode(t1);
@@ -2931,7 +3001,6 @@ async function fetchAndUpdateScores(apiKey) {
         continue;
       }
 
-      // Find matching DB match
       const dbMatch = dbMatches.find(dm =>
         (dm.team_a === code1 && dm.team_b === code2) ||
         (dm.team_a === code2 && dm.team_b === code1)
@@ -2942,22 +3011,19 @@ async function fetchAndUpdateScores(apiKey) {
         continue;
       }
 
-      // Parse scores from API response
-      // CricAPI score format: [{inning: "Team Name Inning 1", r: 156, w: 4, o: 18.2}, ...]
+      // Parse team scores
       const scoreMap = {};
       if (Array.isArray(m.score) && m.score.length > 0) {
         for (const s of m.score) {
           const inningStr = (s.inning || '').toLowerCase();
-          // Try to match team from inning string
           for (const [code, aliases] of Object.entries(TEAM_ALIASES)) {
+            if (scoreMap[code]) continue; // keep first innings (latest overwritten below)
             for (const alias of aliases) {
               if (inningStr.includes(alias)) {
-                // Use latest innings data (overwrite if 2nd innings)
                 scoreMap[code] = `${s.r}/${s.w} (${s.o})`;
                 break;
               }
             }
-            if (scoreMap[code]) break;
           }
         }
       }
@@ -2967,13 +3033,7 @@ async function fetchAndUpdateScores(apiKey) {
       const status = mapApiStatus(m.status || '');
       const result = m.status || null;
 
-      // Check if anything actually changed
-      if (dbMatch.score_a === scoreA && dbMatch.score_b === scoreB && dbMatch.status === status) {
-        autoScoreLog(`${code1} vs ${code2}: No change`);
-        continue;
-      }
-
-      // Update via D11API (uses admin RLS policy)
+      // Update match score
       const updateResult = await D11API.updateMatchScore(dbMatch.id, {
         status,
         score_a: scoreA,
@@ -2987,13 +3047,31 @@ async function fetchAndUpdateScores(apiKey) {
       } else {
         autoScoreLog(`✗ ${dbMatch.team_a} vs ${dbMatch.team_b}: ${updateResult.error}`);
       }
+
+      // 5. Fetch player scorecard for fantasy points (uses 1 extra API call per match)
+      if (m.id && (status === 'live' || status === 'completed')) {
+        _autoScoreCallCount++;
+        autoScoreLog(`Fetching scorecard for ${code1} vs ${code2}... (call #${_autoScoreCallCount})`);
+        try {
+          const scRes = await fetch(`https://api.cricapi.com/v1/match_scorecard?apikey=${apiKey}&id=${m.id}`);
+          const scData = await scRes.json();
+
+          if (scData.status === 'success' && scData.data?.scorecard) {
+            const playerPoints = await calcAllPlayerPoints(scData.data, dbMatch.id, sb);
+            autoScoreLog(`✓ Fantasy pts calculated for ${playerPoints} players`);
+          } else {
+            autoScoreLog(`Scorecard not available yet for ${code1} vs ${code2}`);
+          }
+        } catch (scErr) {
+          autoScoreLog(`Scorecard fetch error: ${scErr}`);
+        }
+      }
     }
 
     autoScoreLog(`Done — ${updatedCount} match(es) updated`);
     document.getElementById('admin-autoscore-status').innerHTML =
       '<span style="color:var(--d11-green);">● Running</span> — ' + updatedCount + ' updated, call #' + _autoScoreCallCount + '/100 daily. Next in 2 min';
 
-    // Refresh the manual score updater dropdown too
     loadScoreMatchSelector();
 
   } catch (err) {
@@ -3001,6 +3079,160 @@ async function fetchAndUpdateScores(apiKey) {
     document.getElementById('admin-autoscore-status').innerHTML =
       '<span style="color:var(--d11-red);">● Error</span> — ' + err;
   }
+}
+
+// Calculate fantasy points for all players in a match scorecard and write to live_scores
+async function calcAllPlayerPoints(matchData, dbMatchId, sb) {
+  const scorecard = matchData.scorecard || [];
+
+  // Build player stats map: playerName → { batting, bowling, fielding }
+  const playerStats = {};
+
+  for (const innings of scorecard) {
+    // Batting
+    for (const b of (innings.batting || [])) {
+      const name = b.batsman?.name;
+      if (!name) continue;
+      if (!playerStats[name]) playerStats[name] = {};
+      // Accumulate across innings (T20 rarely has 2 innings, but handle it)
+      if (!playerStats[name].batting) {
+        playerStats[name].batting = { r: 0, b: 0, '4s': 0, '6s': 0, sr: 0, dismissal: null };
+      }
+      playerStats[name].batting.r += (b.r || 0);
+      playerStats[name].batting.b += (b.b || 0);
+      playerStats[name].batting['4s'] += (b['4s'] || 0);
+      playerStats[name].batting['6s'] += (b['6s'] || 0);
+      if (b.dismissal && b.dismissal !== 'not out') playerStats[name].batting.dismissal = b.dismissal;
+    }
+
+    // Bowling
+    for (const bw of (innings.bowling || [])) {
+      const name = bw.bowler?.name;
+      if (!name) continue;
+      if (!playerStats[name]) playerStats[name] = {};
+      if (!playerStats[name].bowling) {
+        playerStats[name].bowling = { o: 0, m: 0, r: 0, w: 0, eco: 0 };
+      }
+      playerStats[name].bowling.o += (bw.o || 0);
+      playerStats[name].bowling.m += (bw.m || 0);
+      playerStats[name].bowling.r += (bw.r || 0);
+      playerStats[name].bowling.w += (bw.w || 0);
+    }
+    // Recalc economy after accumulating
+    for (const name in playerStats) {
+      if (playerStats[name].bowling && playerStats[name].bowling.o > 0) {
+        playerStats[name].bowling.eco = playerStats[name].bowling.r / playerStats[name].bowling.o;
+      }
+    }
+
+    // Fielding (catches, stumpings, runouts)
+    for (const f of (innings.catching || [])) {
+      const name = f.catcher?.name;
+      if (!name) continue;
+      if (!playerStats[name]) playerStats[name] = {};
+      if (!playerStats[name].fielding) {
+        playerStats[name].fielding = { catch: 0, stumped: 0, runout: 0 };
+      }
+      playerStats[name].fielding.catch += (f.catch || 0);
+      playerStats[name].fielding.stumped += (f.stumped || 0);
+      playerStats[name].fielding.runout += (f.runout || 0);
+    }
+  }
+
+  // Match player names to our DB players and write fantasy points
+  const { data: dbPlayers } = await sb.from('match_players')
+    .select('player_id, players:player_id (id, name, team, role)')
+    .eq('match_id', dbMatchId);
+
+  if (!dbPlayers || dbPlayers.length === 0) {
+    autoScoreLog('No match_players found in DB for this match');
+    return 0;
+  }
+
+  let count = 0;
+  const upserts = [];
+
+  for (const mp of dbPlayers) {
+    const p = mp.players;
+    if (!p) continue;
+
+    // Try exact name match first, then fuzzy
+    let stats = playerStats[p.name];
+    if (!stats) {
+      // Try matching by last name or partial match
+      const pNameLower = p.name.toLowerCase();
+      for (const [apiName, s] of Object.entries(playerStats)) {
+        const apiLower = apiName.toLowerCase();
+        if (apiLower.includes(pNameLower) || pNameLower.includes(apiLower)) {
+          stats = s;
+          break;
+        }
+        // Match by last name
+        const pLast = pNameLower.split(' ').pop();
+        const apiLast = apiLower.split(' ').pop();
+        if (pLast.length > 3 && pLast === apiLast) {
+          stats = s;
+          break;
+        }
+      }
+    }
+
+    const pts = stats ? calcFantasyPoints(stats.batting, stats.bowling, stats.fielding) : 0;
+    const batStatus = stats?.batting
+      ? (stats.batting.dismissal ? 'out' : 'batting')
+      : (stats?.bowling ? 'bowling' : 'waiting');
+
+    upserts.push({
+      match_id: dbMatchId,
+      player_id: p.id,
+      fantasy_pts: pts,
+      status: batStatus,
+      // Batting
+      runs: stats?.batting?.r || 0,
+      balls_faced: stats?.batting?.b || 0,
+      fours: stats?.batting?.['4s'] || 0,
+      sixes: stats?.batting?.['6s'] || 0,
+      strike_rate: stats?.batting?.b > 0 ? Math.round((stats.batting.r / stats.batting.b) * 100 * 100) / 100 : 0,
+      // Bowling
+      overs_bowled: stats?.bowling?.o || 0,
+      maidens: stats?.bowling?.m || 0,
+      runs_conceded: stats?.bowling?.r || 0,
+      wickets: stats?.bowling?.w || 0,
+      economy: stats?.bowling?.eco || 0,
+      // Fielding
+      catches: stats?.fielding?.catch || 0,
+      run_outs: stats?.fielding?.runout || 0,
+      stumpings: stats?.fielding?.stumped || 0,
+      updated_at: new Date().toISOString(),
+    });
+    count++;
+  }
+
+  // Upsert all player scores to live_scores table
+  if (upserts.length > 0) {
+    const { error } = await sb.from('live_scores')
+      .upsert(upserts, { onConflict: 'match_id,player_id' });
+    if (error) {
+      autoScoreLog(`live_scores upsert error: ${error.message}`);
+      // If table doesn't exist or conflict issue, store in memory instead
+      window._liveFantasyPoints = window._liveFantasyPoints || {};
+      window._liveFantasyPoints[dbMatchId] = upserts;
+    }
+  }
+
+  // Also store in window for immediate UI access
+  window._liveFantasyPoints = window._liveFantasyPoints || {};
+  window._liveFantasyPoints[dbMatchId] = upserts;
+
+  // Recalculate user team totals and ranks using the DB function
+  try {
+    await sb.rpc('calculate_user_team_points', { p_match_id: dbMatchId });
+    autoScoreLog('✓ Team totals & ranks recalculated');
+  } catch (e) {
+    autoScoreLog('Team recalc skipped: ' + e.message);
+  }
+
+  return count;
 }
 
 // Restore saved API key on admin panel load
