@@ -1636,7 +1636,16 @@ async function loadMatchDetail() {
     } catch (err) {
       console.error('Failed to load players for match:', err);
     }
+
+    // Load leaderboard from Friends League entries
+    loadMatchLeaderboard(match.id);
   }
+
+  // Update leaderboard header
+  document.getElementById('lb-team-a').textContent = codeA;
+  document.getElementById('lb-team-b').textContent = codeB;
+  const effectiveStatus = match._effectiveStatus || match.status;
+  document.getElementById('lb-match-status').textContent = effectiveStatus === 'live' ? '🔴 LIVE' : effectiveStatus === 'completed' ? (match.result || 'Completed') : timeStr;
 }
 
 let _homeMatchesLoaded = false;
@@ -2238,6 +2247,60 @@ function toggleMatchHistory(id) {
   if (!isOpen) el.style.display = 'block';
 }
 
+// ====== LOAD LEADERBOARD FROM DB ======
+async function loadMatchLeaderboard(matchId) {
+  if (typeof D11API === 'undefined') return;
+  try {
+    const contests = await D11API.getContestsByMatch(matchId);
+    const friendsLeague = (contests || []).find(c => c.name === 'Friends League');
+    if (!friendsLeague || !friendsLeague.contest_entries || friendsLeague.contest_entries.length === 0) {
+      renderLeaderboard([]);
+      return;
+    }
+
+    const user = await D11API.getUser();
+    const myId = user?.id;
+
+    // Build leaderboard data from contest entries
+    const entries = friendsLeague.contest_entries
+      .map(e => ({
+        name: e.profiles?.name || e.profiles?.squad_name || 'Player',
+        team: e.profiles?.squad_name || '—',
+        pts: e.user_teams?.total_points || 0,
+        won: e.winnings || 0,
+        rank: e.rank || 0,
+        isYou: e.user_id === myId,
+        userId: e.user_id,
+      }))
+      .sort((a, b) => b.pts - a.pts);
+
+    // Assign ranks based on points
+    entries.forEach((e, i) => e.rank = i + 1);
+
+    renderLeaderboard(entries);
+
+    // Also update live screen friendSquads for the All Squads tab
+    if (user) {
+      const myEntry = entries.find(e => e.isYou);
+      if (myEntry) myName = myEntry.name;
+    }
+    // Populate friendSquads from entries (without player details, just summary)
+    entries.forEach(e => {
+      if (!friendSquads[e.name]) {
+        friendSquads[e.name] = {
+          squad: e.team,
+          pts: e.pts,
+          rank: e.rank,
+          players: [], // player details loaded separately from live_scores
+        };
+      }
+    });
+  } catch (err) {
+    console.warn('Failed to load leaderboard:', err);
+    renderLeaderboard([]);
+  }
+}
+
 // ====== LIVE MATCH ======
 // All friends' squads (visible once match starts)
 // friendSquads populated dynamically from DB when live match starts
@@ -2343,10 +2406,13 @@ async function loadLiveMatchData() {
     document.getElementById('live-match-status').textContent = 'Starts ' + start.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
   }
 
-  // 6. Load live scores from DB (player-level fantasy points)
+  // 6. Load Friends League entries (populates friendSquads + leaderboard)
+  await loadMatchLeaderboard(match.id);
+
+  // 7. Load live scores from DB (player-level fantasy points)
   await loadLivePlayerScores(match.id);
 
-  // 7. Load user's team points and rank
+  // 8. Load user's team points and rank
   await loadLiveUserStats(match.id);
 
   // 8. Start polling for updates every 30s
@@ -2809,10 +2875,27 @@ function renderLiveScorecard() {
 
 function renderAllSquads() {
   const list = document.getElementById('live-squads-list');
-  list.innerHTML = Object.entries(friendSquads).map(([name, sq]) => {
+  const entries = Object.entries(friendSquads);
+  if (entries.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:40px 16px;color:var(--d11-grey);font-size:13px;">No one has joined this match yet.</div>';
+    return;
+  }
+  list.innerHTML = entries.map(([name, sq]) => {
     const isMe = name === myName;
-    const initial = name[0];
-    const players = [...sq.players].sort((a,b) => b.pts - a.pts);
+    const initial = name[0] || '?';
+    const players = (sq.players || []).sort((a,b) => b.pts - a.pts);
+    const playersHtml = players.length > 0 ? players.map(p => {
+      const capTag = p.cap === 'C' ? '<span style="background:var(--d11-gold);color:var(--d11-dark);font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px;margin-left:4px;">C</span>' :
+                    p.cap === 'VC' ? '<span style="background:var(--d11-blue);color:white;font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px;margin-left:4px;">VC</span>' : '';
+      const dotClass = p.status === 'batting' ? 'batting' : p.status === 'bowling' ? 'bowling' : p.status === 'out' ? 'out' : 'waiting';
+      return `<div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--d11-border);font-size:11px;">
+        <div class="live-dot ${dotClass}"></div>
+        <div style="flex:1;font-weight:600;">${p.name}${capTag}</div>
+        <div style="font-size:10px;color:var(--d11-grey);width:35px;">${p.role}</div>
+        <div style="font-size:12px;font-weight:800;width:40px;text-align:right;">${fmtPts(p.pts)}</div>
+      </div>`;
+    }).join('') : '<div style="padding:12px;text-align:center;font-size:11px;color:var(--d11-grey);">Player details available when match is live</div>';
+
     return `<div style="margin:8px 14px;">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
         <div style="width:32px;height:32px;border-radius:50%;background:${isMe?'linear-gradient(135deg,var(--d11-red),var(--d11-orange))':'var(--d11-card)'};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">${initial}</div>
@@ -2827,17 +2910,7 @@ function renderAllSquads() {
         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:var(--d11-grey);flex-shrink:0;"><path d="M7 10l5 5 5-5z"/></svg>
       </div>
       <div style="display:${isMe?'block':'none'};background:var(--d11-card);border-radius:10px;overflow:hidden;margin-bottom:4px;">
-        ${players.map(p => {
-          const capTag = p.cap === 'C' ? '<span style="background:var(--d11-gold);color:var(--d11-dark);font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px;margin-left:4px;">C</span>' :
-                        p.cap === 'VC' ? '<span style="background:var(--d11-blue);color:white;font-size:8px;font-weight:900;padding:1px 4px;border-radius:3px;margin-left:4px;">VC</span>' : '';
-          const dotClass = p.status === 'batting' ? 'batting' : p.status === 'bowling' ? 'bowling' : p.status === 'out' ? 'out' : 'waiting';
-          return `<div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--d11-border);font-size:11px;">
-            <div class="live-dot ${dotClass}"></div>
-            <div style="flex:1;font-weight:600;">${p.name}${capTag}</div>
-            <div style="font-size:10px;color:var(--d11-grey);width:35px;">${p.role}</div>
-            <div style="font-size:12px;font-weight:800;width:40px;text-align:right;">${fmtPts(p.pts)}</div>
-          </div>`;
-        }).join('')}
+        ${playersHtml}
       </div>
     </div>`;
   }).join('');
