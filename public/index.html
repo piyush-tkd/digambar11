@@ -2847,6 +2847,7 @@ function mapApiStatus(raw) {
 
 let _autoScoreInterval = null;
 let _autoScoreCallCount = 0;
+let _bgPollerStarted = false;
 
 function autoScoreLog(msg) {
   const log = document.getElementById('admin-autoscore-log');
@@ -2885,6 +2886,81 @@ function stopAutoScoring() {
 async function triggerScoreOnce() {
   autoScoreLog('Manual fetch triggered...');
   await fetchAndUpdateScores();
+}
+
+// ─── Background Auto-Poller (runs automatically during match hours) ───
+// Polls /api/live-score every 2 minutes when there are live matches.
+// Starts automatically on app init — no admin panel needed.
+
+async function startBackgroundPoller() {
+  if (_bgPollerStarted) return;
+  _bgPollerStarted = true;
+  console.log('[AutoPoller] Starting background live score poller');
+
+  async function pollOnce() {
+    try {
+      const res = await fetch('/api/live-score?t=' + Date.now(), { cache: 'no-store' });
+      const data = await res.json();
+      if (data.success) {
+        const updated = data.matches_updated || 0;
+        const fantasy = data.fantasy_scorecards || 0;
+        if (updated > 0 || fantasy > 0) {
+          console.log(`[AutoPoller] Updated ${updated} matches, ${fantasy} scorecards`);
+        }
+      }
+    } catch (e) {
+      console.warn('[AutoPoller] Poll error:', e.message);
+    }
+  }
+
+  // Check if we should be polling (any live matches in DB or matches starting today)
+  async function shouldPoll() {
+    try {
+      if (typeof D11API === 'undefined') return false;
+      const sb = await D11API.init();
+      // Check for any live matches
+      const { data: liveMatches } = await sb
+        .from('matches')
+        .select('id, status, starts_at')
+        .eq('status', 'live');
+      if (liveMatches && liveMatches.length > 0) return true;
+
+      // Check for upcoming matches starting within next 4 hours
+      const now = new Date();
+      const fourHoursLater = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+      const { data: soonMatches } = await sb
+        .from('matches')
+        .select('id, starts_at')
+        .eq('status', 'upcoming')
+        .gte('starts_at', now.toISOString())
+        .lte('starts_at', fourHoursLater.toISOString());
+      if (soonMatches && soonMatches.length > 0) return true;
+
+      // Also poll during typical IPL hours (2 PM - 12 AM IST = 8:30 AM - 6:30 PM UTC)
+      const istHour = now.getUTCHours() + 5 + (now.getUTCMinutes() + 30 >= 60 ? 1 : 0);
+      if (istHour >= 14 && istHour <= 24) return true;
+
+      return false;
+    } catch (e) {
+      // If we can't check, default to polling during evening IST hours
+      const now = new Date();
+      const istHour = now.getUTCHours() + 5 + (now.getUTCMinutes() + 30 >= 60 ? 1 : 0);
+      return istHour >= 14 && istHour <= 24;
+    }
+  }
+
+  // Main loop: check every 2 minutes
+  async function loop() {
+    const active = await shouldPoll();
+    if (active) {
+      await pollOnce();
+    }
+    // Schedule next check — 2 min if active, 5 min if idle
+    setTimeout(loop, active ? 2 * 60 * 1000 : 5 * 60 * 1000);
+  }
+
+  // Start after a brief delay so initial page load completes first
+  setTimeout(loop, 10000);
 }
 
 // Fantasy points calculator kept for client-side reference (actual calc is server-side now)
@@ -2931,7 +3007,7 @@ async function fetchAndUpdateScores() {
     document.getElementById('admin-autoscore-status').innerHTML =
       '<span style="color:var(--d11-green);">● Running</span> — fetching via Sportmonks... (call #' + _autoScoreCallCount + ')';
 
-    const res = await fetch('/api/live-score');
+    const res = await fetch('/api/live-score?t=' + Date.now(), { cache: 'no-store' });
     const data = await res.json();
 
     if (!data.success) {
@@ -4133,6 +4209,8 @@ async function initApp() {
     const user = await D11API.getUser();
     if (user) {
       _appInitialized = true;
+      // Start background live score poller (auto during match hours)
+      startBackgroundPoller();
       if (user.squadName) {
         // Returning user — go to home
         window.userName = user.name;
