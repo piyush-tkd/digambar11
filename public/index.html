@@ -112,7 +112,8 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .wallet-badge svg { width: 16px; height: 16px; fill: var(--d11-gold); }
 
 /* Scrollable Content */
-.screen { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; display: none; flex-direction: column; }
+.screen { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; display: none; flex-direction: column; min-height: 0; }
+#screen-preview, #screen-team-select, #screen-captain, #screen-impact { overflow-y: hidden; }
 .screen.active { display: flex; }
 
 /* Bottom Navigation */
