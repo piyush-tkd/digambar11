@@ -56,7 +56,7 @@ function mapStatus(raw, note) {
   if (['1st innings', '2nd innings', 'innings break', 'stump day 1', 'stump day 2', 'stump day 3', 'stump day 4'].some(x => s === x)) return 'live';
   if (s.includes('live') || s.includes('break') || s.includes('innings') || s.includes('timeout') || s.includes('in progress')) return 'live';
   if (s.includes('abandon') || s.includes('no result')) return 'abandoned';
-  if (s.includes('upcoming') || s.includes('not started') || s.includes('scheduled') || s === '' || s === 'ns') return 'upcoming';
+  if (s.includes('upcoming') || s.includes('not started') || s.includes('scheduled') || s === '' || s === 'ns' || s === 'toss' || s.includes('delay')) return 'upcoming';
 
   console.log(`[mapStatus] Unknown status: "${raw}" note: "${note}" — defaulting to live`);
   return 'live'; // Default to live if unknown
