@@ -293,8 +293,17 @@ async function fetchSportmonks(dbMatches) {
 
       const scoreA = scoreMap[dbMatch.team_a] || 'Yet to bat';
       const scoreB = scoreMap[dbMatch.team_b] || 'Yet to bat';
-      const status = mapStatus(m.status || '', m.note || '');
+      let status = mapStatus(m.status || '', m.note || '');
       const result = m.note || m.status || null;
+
+      // Safety: if match hasn't started yet per DB start time, force upcoming
+      // This prevents bad API status from marking future matches as live
+      if (dbMatch.starts_at && new Date(dbMatch.starts_at) > new Date()) {
+        if (status === 'live') {
+          console.log(`[Sportmonks] Match ${code1} vs ${code2} hasn't started yet (starts_at: ${dbMatch.starts_at}), overriding "${m.status}" → upcoming`);
+          status = 'upcoming';
+        }
+      }
 
       if (status === 'upcoming') {
         console.log(`[Sportmonks] Match ${code1} vs ${code2} still upcoming, skipping`);
