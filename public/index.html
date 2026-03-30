@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Digambar 11 — Fantasy Cricket</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#E91E2C">
@@ -80,10 +80,11 @@
 .theme-label-hint { font-size: 11px; color: var(--d11-grey); margin-top: 1px; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-darker); color: var(--d11-white); overflow: hidden; height: 100vh; width: 100vw; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-darker); color: var(--d11-white); overflow: hidden; height: 100dvh; height: 100vh; width: 100vw; padding-top: var(--safe-top); }
+@supports (height: 100dvh) { body { height: 100dvh; } }
 
 /* App Container */
-.app { width: 100%; max-width: 430px; height: 100vh; margin: 0 auto; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--d11-darker); }
+.app { width: 100%; max-width: 430px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--d11-darker); }
 
 /* Status Bar */
 /* .status-bar removed — was mock phone UI */
@@ -203,7 +204,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .d11-loader { text-align:center;padding:40px 0;color:var(--d11-grey);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:10px; }
 
 /* Create Team Button */
-.create-team-btn { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--d11-green) 0%, #219150 100%); color: white; border: none; padding: 14px 40px; border-radius: 30px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(39,174,96,0.4); z-index: 10; display: none; letter-spacing: 0.3px; }
+.create-team-btn { position: fixed; bottom: calc(24px + var(--safe-bottom)); left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--d11-green) 0%, #219150 100%); color: white; border: none; padding: 14px 40px; border-radius: 30px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 20px rgba(39,174,96,0.4); z-index: 10; display: none; letter-spacing: 0.3px; }
 .create-team-btn:active { transform: translateX(-50%) scale(0.95); }
 .create-team-btn.visible { display: block; }
 
@@ -275,7 +276,7 @@ body { font-family: 'Inter', -apple-system, sans-serif; background: var(--d11-da
 .player-card.selected .player-add svg { fill: white; }
 
 /* Next/Preview Button */
-.selection-footer { padding: 12px 16px; background: var(--d11-dark); border-top: 1px solid var(--d11-border); flex-shrink: 0; }
+.selection-footer { padding: 12px 16px calc(12px + var(--safe-bottom)); background: var(--d11-dark); border-top: 1px solid var(--d11-border); flex-shrink: 0; }
 .next-btn { width: 100%; padding: 14px; border-radius: 10px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
 .next-btn.enabled { background: linear-gradient(135deg, var(--d11-green) 0%, #219150 100%); color: white; }
 .next-btn.disabled { background: var(--d11-card); color: var(--d11-grey); pointer-events: none; }
